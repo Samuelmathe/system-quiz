@@ -1,6 +1,6 @@
 """
 QUIZ BOARD V6 - Version finale
-- Suppression des icônes qui s'affichent mal
+- Icône fenêtre / barre titre : dossier projet ``assets/`` (score.ico puis score.png)
 - Console auto-nettoyante (garde les 10 dernières lignes)
 """
 
@@ -33,6 +33,33 @@ def get_base_path():
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def get_assets_dir():
+    """Dossier des ressources image (icônes), à la racine du projet : ``assets/``.
+    PyInstaller onefile : fichiers embarqués sous ``_MEIPASS/assets``."""
+    if getattr(sys, 'frozen', False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            return os.path.join(meipass, "assets")
+        return os.path.join(os.path.dirname(sys.executable), "assets")
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
+
+
+def apply_viewport_icons():
+    """Barre de titre / dock : Dear PyGui — Windows attend surtout un .ico ; macOS .ico ou .png."""
+    assets = get_assets_dir()
+    # Préférer .ico (meilleure compatibilité Windows), sinon .png (souvent ok Linux / macOS)
+    for name in ("score.ico", "score.png"):
+        path = os.path.join(assets, name)
+        if os.path.isfile(path):
+            try:
+                dpg.set_viewport_small_icon(path)
+                dpg.set_viewport_large_icon(path)
+                return True
+            except Exception:
+                continue
+    return False
 
 # =========================================================
 # 1. CLASSES ET ENUMERATIONS
@@ -1051,6 +1078,8 @@ def main():
     )
     
     dpg.setup_dearpygui()
+    # Obligatoire : avant ``show_viewport`` (doc Dear PyGui)
+    apply_viewport_icons()
     dpg.show_viewport()
     dpg.set_primary_window("main_window", True)
     
