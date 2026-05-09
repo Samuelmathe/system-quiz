@@ -37,6 +37,8 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: |
+          # NOTE: We bundle the whole `interface/sounds/` directory so the executable can load any
+          # optional team sound file (equipe_1.mp3 ... equipe_30.mp3) in addition to the 3 base files.
           pyinstaller --onefile --windowed --name="QuizBoardV6" --hidden-import=serial.tools.list_ports --hidden-import=serial.tools.list_ports_windows --add-data="interface/sounds;sounds" interface/interface_30eq.py
 
       - name: Upload Windows executable
@@ -74,6 +76,8 @@ jobs:
       - name: Build with PyInstaller
         shell: bash
         run: |
+          # NOTE: We bundle the whole `interface/sounds/` directory so the executable can load any
+          # optional team sound file (equipe_1.mp3 ... equipe_30.mp3) in addition to the 3 base files.
           pyinstaller --onefile --windowed --name="QuizBoardV6" --hidden-import=serial.tools.list_ports --hidden-import=serial.tools.list_ports_posix --add-data="interface/sounds:sounds" interface/interface_30eq.py
 
       - name: Upload macOS executable
