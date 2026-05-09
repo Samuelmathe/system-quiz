@@ -47,10 +47,11 @@ Ces fichiers JSON sont créés automatiquement **à côté de chaque script**, c
 
 ## Sons (interface)
 
-`interface/interface_30eq.py` essaie de charger :
-- `sounds/buzz.mp3`
-- `sounds/victoire.mp3`
-- `sounds/echec.mp3`
+`interface/interface_30eq.py` essaie de charger des sons depuis le dossier `sounds/` **à côté du script** :
+- `buzz.mp3` (buzz général / fallback)
+- `victoire.mp3` (bonne réponse)
+- `echec.mp3` (mauvaise réponse)
+- `equipe_1.mp3` → `equipe_30.mp3` (sons spécifiques par équipe, optionnels)
 
 Le dossier `sounds/` doit être **à côté du script** (ou à côté de l’exécutable si tu as “packagé” l’app).
 Exemple attendu :
@@ -62,6 +63,9 @@ interface/
     buzz.mp3
     victoire.mp3
     echec.mp3
+    equipe_1.mp3
+    ...
+    equipe_30.mp3
 ```
 
 Si `pygame` n’est pas dispo (ou si les fichiers sont absents), l’interface fonctionne, mais sans sons.
