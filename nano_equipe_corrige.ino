@@ -1,6 +1,7 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <avr/wdt.h>
 
 // =========================================================
 // CONFIGURATION
@@ -10,8 +11,25 @@ const byte adresse[6] = "00001";
 const int boutonPin  = 2;
 const int moteurPin  = 3; // Vibreur
 
+#define RADIO_CHANNEL  108
+
 // --- ID DE L'EQUIPE (modifier de 1 a 8) ---
 int monEquipe = 3;
+
+// Message radio (doit matcher la MEGA)
+struct RadioMsg {
+    uint8_t kind;   // 1=BUZZ_EQUIPE
+    uint8_t value;  // team 1..30
+    uint16_t seq;   // increment
+};
+uint16_t seqCounter = 0;
+
+// Anti-rebond / anti-spam (ms)
+const unsigned long DEBOUNCE_MS = 25;
+const unsigned long COOLDOWN_MS = 250;
+unsigned long lastSendMs = 0;
+bool lastBtn = true;
+unsigned long lastChangeMs = 0;
 
 // =========================================================
 // SETUP
@@ -23,13 +41,19 @@ void setup() {
     pinMode(LED_BUILTIN, OUTPUT);
 
     digitalWrite(moteurPin, LOW);
+    wdt_enable(WDTO_2S);
 
     if (radio.begin()) {
-        radio.setChannel(108);
+        radio.setChannel(RADIO_CHANNEL);
+        radio.setAddressWidth(5);
         radio.openWritingPipe(adresse);
         radio.setPALevel(RF24_PA_MAX);
         radio.setDataRate(RF24_250KBPS);
-        radio.setAutoAck(false); // Pas d'ACK nécessaire
+        radio.setCRCLength(RF24_CRC_16);
+        radio.setPayloadSize(sizeof(RadioMsg));
+        // Fiabilité: AutoAck + retries
+        radio.setAutoAck(true);
+        radio.setRetries(10, 15);
         radio.stopListening();
 
         Serial.print("Buzzer Equipe ");
@@ -44,34 +68,42 @@ void setup() {
 // LOOP
 // =========================================================
 void loop() {
-    if (digitalRead(boutonPin) == LOW) {
+    wdt_reset();
+    bool btn = (digitalRead(boutonPin) == LOW);
+    unsigned long now = millis();
 
-        // 1. Vibration + LED immédiate
-        digitalWrite(moteurPin, HIGH);
-        digitalWrite(LED_BUILTIN, HIGH);
-        Serial.println("Appui detecte, envoi du signal...");
+    if (btn != lastBtn) {
+        lastBtn = btn;
+        lastChangeMs = now;
+    }
 
-        // 2. Envoyer le numero d'equipe au meme format binaire que la Mega lit
-        int signal = monEquipe;
-        bool succes = radio.write(&signal, sizeof(signal));
+    // Appui stable (debounce)
+    if (btn && (now - lastChangeMs) >= DEBOUNCE_MS) {
+        // Cooldown pour éviter spam + garder la réactivité
+        if (now - lastSendMs >= COOLDOWN_MS) {
+            lastSendMs = now;
 
-        // 3. Vibration 200ms
-        delay(200);
-        digitalWrite(moteurPin, LOW);
-        digitalWrite(LED_BUILTIN, LOW);
+            // Feedback immédiat
+            digitalWrite(moteurPin, HIGH);
+            digitalWrite(LED_BUILTIN, HIGH);
 
-        if (succes) {
-            Serial.print("TRANSMIS : Equipe ");
-            Serial.print(monEquipe);
-            Serial.println(" envoyee !");
-        } else {
-            Serial.println("Signal envoye !");
-            // Note : succes peut être false même si la Mega reçoit
-            // car AutoAck est désactivé - ce n'est pas une vraie erreur
+            int signal = monEquipe;
+
+            RadioMsg msg;
+            msg.kind = 1;
+            msg.value = (uint8_t)signal;
+            msg.seq = ++seqCounter;
+
+            // Essayer plusieurs fois: avec AutoAck, on s'arrête dès que ça passe
+            bool ok = false;
+            for (int i = 0; i < 5 && !ok; i++) {
+                ok = radio.write(&msg, sizeof(msg));
+                if (!ok) delay(8);
+            }
+
+            delay(120);
+            digitalWrite(moteurPin, LOW);
+            digitalWrite(LED_BUILTIN, LOW);
         }
-
-        // 4. Anti-spam + attendre relâchement
-        delay(1000);
-        while (digitalRead(boutonPin) == LOW);
     }
 }

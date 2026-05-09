@@ -4,6 +4,8 @@
 #include <DMXSerial.h>
 #include <EEPROM.h>
 #include <avr/wdt.h>
+#include <string.h>
+#include <stdlib.h>
 
 // =========================================================
 // CONFIGURATION MATÉRIELLE
@@ -12,6 +14,8 @@ RF24 radio(9, 53);
 
 const byte adresseBuzzers[6] = "00001";
 const byte adresseSon[6]     = "00002";
+
+#define RADIO_CHANNEL  108
 
 #define LED 13
 #define MAGIC_NUMBER 0xAB
@@ -37,6 +41,37 @@ bool radioOK               = false;
 unsigned long dernierBattement  = 0;
 int dernierSignal          = -1;
 unsigned long dernierSignalTemps = 0;
+
+// =========================================================
+// RADIO: Payload fiable (AutoAck + seq)
+// =========================================================
+struct RadioMsg {
+    uint8_t kind;   // 1=BUZZ_EQUIPE, 2=CMD (RESET/RELANCE)
+    uint8_t value;  // BUZZ: team 1..30 ; CMD: 88/99
+    uint16_t seq;   // increment côté émetteur
+};
+static uint16_t lastSeqEquipe[30] = {0}; // index 0..29
+static uint16_t lastSeqCmd = 0;
+static bool lastSeqInitEquipe[30] = {false};
+static bool lastSeqInitCmd = false;
+
+// ---- LED non-bloquante (pulse) ----
+unsigned long ledPulseUntil = 0;
+inline void ledPulse(unsigned long ms) {
+    digitalWrite(LED, HIGH);
+    ledPulseUntil = millis() + ms;
+}
+inline void ledUpdate() {
+    if (ledPulseUntil != 0 && (long)(millis() - ledPulseUntil) >= 0) {
+        digitalWrite(LED, LOW);
+        ledPulseUntil = 0;
+    }
+}
+
+// ---- Serial3 non-bloquant (buffer ligne) ----
+#define SERIAL_BUF_LEN 96
+char serialBuf[SERIAL_BUF_LEN];
+uint8_t serialLen = 0;
 
 // ---- BUZZ SIMULTANÉS - Fenêtre 50ms ----
 #define FENETRE_MS   50
@@ -109,7 +144,10 @@ void initialiserConfigParDefaut() {
 void envoyerSon(int signal) {
     radio.stopListening();
     radio.openWritingPipe(adresseSon);
+    // Le Nano son est en AutoAck=false -> envoi "fire and forget"
+    radio.setAutoAck(false);
     radio.write(&signal, sizeof(signal));
+    radio.setAutoAck(true);
     radio.openWritingPipe(adresseBuzzers);
     radio.startListening();
 }
@@ -139,10 +177,16 @@ void setup() {
     // 4. RADIO
     if (radio.begin()) {
         radioOK = true;
-        radio.setChannel(108);
+        radio.setChannel(RADIO_CHANNEL);
+        radio.setAddressWidth(5);
         radio.setPALevel(RF24_PA_MAX);
         radio.setDataRate(RF24_250KBPS);
-        radio.setAutoAck(false);
+        radio.setCRCLength(RF24_CRC_16);
+        radio.setPayloadSize(sizeof(RadioMsg));
+        // Fiabilité: AutoAck + retries (émetteurs doivent aussi être en AutoAck=true)
+        radio.setAutoAck(true);
+        // Delay=10 (~2500us) donne plus de marge; Count=15 est le max
+        radio.setRetries(10, 15);
         radio.openReadingPipe(1, adresseBuzzers);
         radio.startListening();
 
@@ -173,6 +217,7 @@ void setup() {
 void loop() {
 
     wdt_reset();
+    ledUpdate();
 
     // Traiter fenêtre expirée
     if (fenetreActive && millis() - debutFenetre >= FENETRE_MS) {
@@ -193,10 +238,9 @@ void loop() {
         int p; while (radio.available()) { radio.read(&p, sizeof(p)); }
     }
 
-    // BATTEMENT LED toutes les 2 secondes
+    // BATTEMENT LED toutes les 2 secondes (non-bloquant)
     if (radioOK && millis() - dernierBattement > 2000) {
-        digitalWrite(LED, HIGH); delay(50);
-        digitalWrite(LED, LOW);
+        ledPulse(50);
         dernierBattement = millis();
     }
 
@@ -205,31 +249,64 @@ void loop() {
         dernierSignal = -1;
     }
 
-    // RÉCEPTION SERIAL3 (Logiciels PC)
-    if (Serial3.available() > 0) {
-        String line = Serial3.readStringUntil('\n');
-        line.trim();
-        if (line.length() > 0) parseCommande(line);
+    // RÉCEPTION SERIAL3 (Logiciels PC) - non bloquant, sans String
+    while (Serial3.available() > 0) {
+        char c = (char)Serial3.read();
+        if (c == '\r') continue;
+        if (c == '\n') {
+            serialBuf[serialLen] = '\0';
+            // trim spaces
+            while (serialLen > 0 && (serialBuf[serialLen - 1] == ' ' || serialBuf[serialLen - 1] == '\t')) {
+                serialBuf[--serialLen] = '\0';
+            }
+            uint8_t start = 0;
+            while (serialBuf[start] == ' ' || serialBuf[start] == '\t') start++;
+            if (serialLen > start) {
+                parseCommande(serialBuf + start);
+            }
+            serialLen = 0;
+        } else {
+            if (serialLen < SERIAL_BUF_LEN - 1) {
+                serialBuf[serialLen++] = c;
+            } else {
+                // overflow -> reset line
+                serialLen = 0;
+            }
+        }
     }
 
     // RÉCEPTION RADIO buzzers
     if (radio.available()) {
-        int signal = 0;
-        radio.read(&signal, sizeof(signal));
+        RadioMsg msg = {0, 0, 0};
+        radio.read(&msg, sizeof(msg));
+        int signal = (int)msg.value;
 
         // Anti-doublon
-        if (signal == dernierSignal) return;
+        // - pour buzz: on filtre par seq par équipe (évite doubles quand on envoie plusieurs fois)
+        // - pour CMD: on filtre par seq global
+        if (msg.kind == 1) {
+            int idx = signal - 1;
+            if (idx >= 0 && idx < settings.nbEquipes) {
+                if (lastSeqInitEquipe[idx] && lastSeqEquipe[idx] == msg.seq) return;
+                lastSeqEquipe[idx] = msg.seq;
+                lastSeqInitEquipe[idx] = true;
+            }
+        } else if (msg.kind == 2) {
+            if (lastSeqInitCmd && lastSeqCmd == msg.seq) return;
+            lastSeqCmd = msg.seq;
+            lastSeqInitCmd = true;
+        } else {
+            // Message inconnu -> fallback ancien anti-doublon
+            if (signal == dernierSignal) return;
+        }
         dernierSignal      = signal;
         dernierSignalTemps = millis();
 
-        // Clignotement = signal reçu
-        for (int i = 0; i < 5; i++) {
-            digitalWrite(LED, HIGH); delay(30);
-            digitalWrite(LED, LOW);  delay(30);
-        }
+        // Indication réception (non-bloquante)
+        ledPulse(60);
 
         // C'est une équipe → buffer fenêtre simultanée
-        if (signal >= 1 && signal <= settings.nbEquipes) {
+        if (msg.kind == 1 && signal >= 1 && signal <= settings.nbEquipes) {
             if (!fenetreActive) {
                 fenetreActive = true;
                 debutFenetre  = millis();
@@ -245,7 +322,7 @@ void loop() {
         }
 
         // 99 = RESET_ALL (Nano animateur bonne réponse)
-        else if (signal == 99) {
+        else if (msg.kind == 2 && signal == 99) {
             // NOTIFIER LE LOGICIEL EN PREMIER → zéro latence !
             Serial3.println("CMD_SENT:RESET_ALL");
             envoyerSon(201);
@@ -254,8 +331,8 @@ void loop() {
             jeuVerrouille = false;
             dernierSignal = -1;
 
-            // Clignotement APRÈS notification → pas de blocage
-            clignoterVert();
+            // Retirer les clignotements DMX bloquants: juste feedback LED
+            ledPulse(150);
             eteindreLumieres();
 
             int poubelle;
@@ -263,7 +340,7 @@ void loop() {
         }
 
         // 88 = RELANCE_PARTIEL (Nano animateur mauvaise réponse)
-        else if (signal == 88) {
+        else if (msg.kind == 2 && signal == 88) {
             // NOTIFIER LE LOGICIEL EN PREMIER → zéro latence !
             Serial3.println("CMD_SENT:RELANCE_PARTIEL");
             envoyerSon(202);
@@ -271,8 +348,8 @@ void loop() {
             jeuVerrouille = false;
             dernierSignal = -1;
 
-            // Clignotement APRÈS notification → pas de blocage
-            clignoterRouge();
+            // Retirer les clignotements DMX bloquants: juste feedback LED
+            ledPulse(150);
             eteindreLumieres();
 
             int poubelle;
@@ -284,12 +361,43 @@ void loop() {
 // =========================================================
 // PARSING COMMANDES (Logiciels PC via Serial3)
 // =========================================================
-void parseCommande(String line) {
+static int parse_int(const char *s, const char **endptr) {
+    char *end = NULL;
+    long v = strtol(s, &end, 10);
+    if (endptr) *endptr = (const char*)end;
+    return (int)v;
+}
+
+static bool starts_with(const char *s, const char *prefix) {
+    while (*prefix) {
+        if (*s++ != *prefix++) return false;
+    }
+    return true;
+}
+
+static uint8_t parse_colon_ints(const char *s, int *out, uint8_t maxCount) {
+    uint8_t count = 0;
+    const char *p = s;
+    while (*p && count < maxCount) {
+        // Skip separators
+        if (*p == ':') p++;
+        // Parse int
+        const char *endp = NULL;
+        out[count++] = parse_int(p, &endp);
+        if (endp == p) break; // no progress
+        p = endp;
+        // Move to next ':' or end
+        while (*p && *p != ':') p++;
+    }
+    return count;
+}
+
+void parseCommande(const char *line) {
 
     // ---- LOGICIEL SCORES ----
 
     // Bonne réponse via PC (VALIDER)
-    if (line == "RESET_ALL") {
+    if (strcmp(line, "RESET_ALL") == 0) {
         radio.stopListening();
         radio.openWritingPipe(adresseBuzzers);
         int sig = 99;
@@ -298,7 +406,7 @@ void parseCommande(String line) {
         Serial3.println("CMD_SENT:RESET_ALL");
 
         envoyerSon(201);
-        clignoterVert();
+        ledPulse(150);
         eteindreLumieres();
 
         for (int i = 0; i < 31; i++) dejaJoue[i] = false;
@@ -309,7 +417,7 @@ void parseCommande(String line) {
     }
 
     // Mauvaise réponse via PC (REFUSER)
-    else if (line == "RELANCE_PARTIEL") {
+    else if (strcmp(line, "RELANCE_PARTIEL") == 0) {
         radio.stopListening();
         radio.openWritingPipe(adresseBuzzers);
         int sig = 88;
@@ -318,7 +426,7 @@ void parseCommande(String line) {
         Serial3.println("CMD_SENT:RELANCE_PARTIEL");
 
         envoyerSon(202);
-        clignoterRouge();
+        ledPulse(150);
         eteindreLumieres();
 
         jeuVerrouille = false;
@@ -329,54 +437,59 @@ void parseCommande(String line) {
 
     // ---- LOGICIEL CONFIG ----
 
-    else if (line.startsWith("SET_PATCH:")) {
-        int p1 = line.indexOf(':', 10);
-        int p2 = line.indexOf(':', p1 + 1);
-        int p3 = line.indexOf(':', p2 + 1);
-        int p4 = line.indexOf(':', p3 + 1);
-        settings.nbCanaux = line.substring(10, p1).toInt();
-        settings.offDim   = line.substring(p1 + 1, p2).toInt();
-        settings.offR     = line.substring(p2 + 1, p3).toInt();
-        settings.offG     = line.substring(p3 + 1, p4).toInt();
-        settings.offB     = line.substring(p4 + 1).toInt();
-        Serial3.println("CONF:PATCH_OK");
-    }
-
-    else if (line.startsWith("SET_NB_EQ:")) {
-        settings.nbEquipes = constrain(line.substring(10).toInt(), 1, 30);
-        Serial3.println("CONF:NB_EQUIPES_OK");
-    }
-
-    else if (line.startsWith("SET_ADR:")) {
-        int split = line.indexOf(':', 8);
-        int idx   = line.substring(8, split).toInt();
-        int adr   = line.substring(split + 1).toInt();
-        if (idx >= 0 && idx < 30) settings.adressesDMX[idx] = adr;
-        Serial3.println("CONF:ADR_OK");
-    }
-
-    else if (line.startsWith("SET_COL:")) {
-        int p1 = line.indexOf(':', 8);
-        int p2 = line.indexOf(':', p1 + 1);
-        int p3 = line.indexOf(':', p2 + 1);
-        int p4 = line.indexOf(':', p3 + 1);
-        int eq  = line.substring(8, p1).toInt() - 1;
-        int grp = line.substring(p1 + 1, p2).toInt();
-        if (eq >= 0 && eq < 30 && grp >= 0 && grp < 30) {
-            settings.couleurs[eq][grp][0] = (byte)constrain(line.substring(p2+1, p3).toInt(), 0, 255);
-            settings.couleurs[eq][grp][1] = (byte)constrain(line.substring(p3+1, p4).toInt(), 0, 255);
-            settings.couleurs[eq][grp][2] = (byte)constrain(line.substring(p4+1).toInt(),     0, 255);
-            Serial3.println("CONF:COL_OK");
+    else if (starts_with(line, "SET_PATCH:")) {
+        int vals[5] = {0};
+        uint8_t n = parse_colon_ints(line + 9, vals, 5); // after "SET_PATCH"
+        if (n >= 5) {
+            settings.nbCanaux = vals[0];
+            settings.offDim   = vals[1];
+            settings.offR     = vals[2];
+            settings.offG     = vals[3];
+            settings.offB     = vals[4];
+            Serial3.println("CONF:PATCH_OK");
         }
     }
 
-    else if (line == "SAVE_CONFIG") {
+    else if (starts_with(line, "SET_NB_EQ:")) {
+        int v = parse_int(line + 10, NULL);
+        settings.nbEquipes = constrain(v, 1, 30);
+        Serial3.println("CONF:NB_EQUIPES_OK");
+    }
+
+    else if (starts_with(line, "SET_ADR:")) {
+        int vals[2] = {0};
+        uint8_t n = parse_colon_ints(line + 7, vals, 2); // after "SET_ADR"
+        if (n >= 2) {
+            int idx = vals[0];
+            int adr = vals[1];
+            if (idx >= 0 && idx < 30) settings.adressesDMX[idx] = adr;
+            Serial3.println("CONF:ADR_OK");
+        }
+    }
+
+    else if (starts_with(line, "SET_COL:")) {
+        int vals[5] = {0};
+        uint8_t n = parse_colon_ints(line + 7, vals, 5); // after "SET_COL"
+        if (n >= 5) {
+            int eq  = vals[0] - 1;
+            int grp = vals[1];
+            int r = vals[2], g = vals[3], b = vals[4];
+            if (eq >= 0 && eq < 30 && grp >= 0 && grp < 30) {
+                settings.couleurs[eq][grp][0] = (byte)constrain(r, 0, 255);
+                settings.couleurs[eq][grp][1] = (byte)constrain(g, 0, 255);
+                settings.couleurs[eq][grp][2] = (byte)constrain(b, 0, 255);
+                Serial3.println("CONF:COL_OK");
+            }
+        }
+    }
+
+    else if (strcmp(line, "SAVE_CONFIG") == 0) {
         settings.magic = MAGIC_NUMBER;
         EEPROM.put(0, settings);
         Serial3.println("CONF:SAVED_TO_EEPROM");
     }
 
-    else if (line == "RESET_V1") {
+    else if (strcmp(line, "RESET_V1") == 0) {
         initialiserConfigParDefaut();
         Serial3.println("CONF:V1_RESTORED");
     }
