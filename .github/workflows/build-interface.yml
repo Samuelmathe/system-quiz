@@ -43,7 +43,7 @@ jobs:
         run: |
           # NOTE: We bundle the whole `interface/sounds/` directory so the executable can load any
           # optional team sound file (equipe_1.mp3 ... equipe_30.mp3) in addition to the 3 base files.
-          pyinstaller --onefile --windowed --name="QuizBoardV6" --hidden-import=serial.tools.list_ports --hidden-import=serial.tools.list_ports_windows --add-data="interface/sounds;sounds" --add-data="assets;assets" interface/interface_30eq.py
+          pyinstaller --onefile --windowed --name="QuizBoardV6" --icon=assets/score.ico --hidden-import=serial.tools.list_ports --hidden-import=serial.tools.list_ports_windows --add-data="interface/sounds;sounds" --add-data="assets;assets" interface/interface_30eq.py
 
       - name: Upload Windows executable
         uses: actions/upload-artifact@v4
