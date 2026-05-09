@@ -390,9 +390,21 @@ def create_themes():
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 15, 15)
             dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6)
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, [25, 25, 30])
-            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, [32, 32, 45])
-            dpg.add_theme_color(dpg.mvThemeCol_Header, [50, 50, 100])
+            dpg.add_theme_color(dpg.mvThemeCol_Text, [230, 230, 238])
+            dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, [120, 120, 130])
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, [12, 12, 14])
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, [18, 18, 22])
+            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, [20, 20, 26])
+            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, [14, 14, 17])
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, [12, 12, 14])
+            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, [22, 22, 28])
+            dpg.add_theme_color(dpg.mvThemeCol_Border, [48, 48, 62])
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, [35, 35, 44])
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, [42, 42, 54])
+            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, [48, 48, 62])
+            dpg.add_theme_color(dpg.mvThemeCol_Header, [40, 40, 60])
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, [52, 52, 75])
+            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, [62, 62, 90])
     with dpg.theme(tag="vert_theme"):
         with dpg.theme_component(dpg.mvButton):
             dpg.add_theme_color(dpg.mvThemeCol_Button, [30, 140, 70])
@@ -412,6 +424,7 @@ def refresh_ui_full():
 def main():
     dpg.create_context()
     create_themes()
+    dpg.bind_theme("global_theme")
     dpg.create_viewport(title="Quiz Config Mega PRO v2.0", width=1050, height=900)
     setup_ui()
     dpg.setup_dearpygui()

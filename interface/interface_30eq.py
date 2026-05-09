@@ -698,14 +698,31 @@ class QuizController:
     def create_dark_theme(self):
         with dpg.theme() as theme:
             with dpg.theme_component(dpg.mvAll):
-                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (18, 18, 24))
-                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (25, 25, 32))
-                dpg.add_theme_color(dpg.mvThemeCol_Border, (60, 60, 80))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (40, 40, 50))
-                dpg.add_theme_color(dpg.mvThemeCol_Text, (220, 220, 230))
+                # Fond noir / gris très sombre par défaut (toute l’app hérite via bind_theme)
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (230, 230, 238))
+                dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (120, 120, 130))
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (12, 12, 14))
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (18, 18, 22))
+                dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (20, 20, 26))
+                dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, (14, 14, 17))
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBg, (12, 12, 14))
+                dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (22, 22, 28))
+                dpg.add_theme_color(dpg.mvThemeCol_Border, (48, 48, 62))
+                dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, (0, 0, 0))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (35, 35, 44))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (42, 42, 54))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (48, 48, 62))
+                dpg.add_theme_color(dpg.mvThemeCol_Header, (40, 40, 54))
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (52, 52, 70))
+                dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (62, 62, 85))
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (45, 85, 145))
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (60, 110, 190))
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (40, 70, 120))
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg, (16, 16, 20))
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab, (55, 55, 72))
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered, (72, 72, 92))
+                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabActive, (92, 92, 115))
+                dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (130, 200, 255))
                 dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 6)
                 dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 4)
         
@@ -714,6 +731,9 @@ class QuizController:
     
     def create_interface(self):
         self.create_dark_theme()
+        # Thème sombre comme défaut Dear PyGui (listes déroulantes, tooltips, éléments hors fenêtre principale)
+        if self.theme_id:
+            dpg.bind_theme(self.theme_id)
         
         with dpg.window(
             tag="main_window",
@@ -724,8 +744,6 @@ class QuizController:
             no_collapse=True,
             no_close=True
         ):
-            if self.theme_id:
-                dpg.bind_item_theme("main_window", self.theme_id)
             
             # ========== EN-TETE ==========
             with dpg.group(horizontal=True):

@@ -191,16 +191,23 @@ void initialiserConfigParDefaut() {
 
 // =========================================================
 // ENVOI SIGNAL AU NANO SON
-// 200 = buzz valide
-// 201 = bonne réponse
-// 202 = mauvaise réponse
+// 200 = buzz valide (team = numero equipe 1..30 pour son dedicace)
+// 201 = bonne réponse (team = 0)
+// 202 = mauvaise réponse (team = 0)
 // =========================================================
-void envoyerSon(int signal) {
+struct SonPayload {
+    uint16_t cmd;
+    uint8_t team;  // buzz: 1..30 ; autres: 0
+    uint8_t reserved;
+};
+
+void envoyerSon(uint16_t cmd, uint8_t team) {
+    SonPayload p = { cmd, team, 0 };
     radio.stopListening();
     radio.openWritingPipe(adresseSon);
     // Le Nano son est en AutoAck=false -> envoi "fire and forget"
     radio.setAutoAck(false);
-    radio.write(&signal, sizeof(signal));
+    radio.write(&p, sizeof(p));
     radio.setAutoAck(true);
     radio.openWritingPipe(adresseBuzzers);
     radio.startListening();
@@ -284,7 +291,7 @@ void loop() {
                 dejaJoue[sig] = true;
                 allumerCouleurEquipe(sig);
                 Serial3.print("BUZZ:"); Serial3.println(sig);
-                envoyerSon(200);
+                envoyerSon(200, (uint8_t)sig);
                 break;
             }
         }
@@ -380,7 +387,7 @@ void loop() {
         else if (msg.kind == 2 && signal == 99) {
             // NOTIFIER LE LOGICIEL EN PREMIER → zéro latence !
             Serial3.println("CMD_SENT:RESET_ALL");
-            envoyerSon(201);
+            envoyerSon(201, 0);
 
             for (int i = 0; i < 31; i++) dejaJoue[i] = false;
             jeuVerrouille = false;
@@ -398,7 +405,7 @@ void loop() {
         else if (msg.kind == 2 && signal == 88) {
             // NOTIFIER LE LOGICIEL EN PREMIER → zéro latence !
             Serial3.println("CMD_SENT:RELANCE_PARTIEL");
-            envoyerSon(202);
+            envoyerSon(202, 0);
 
             jeuVerrouille = false;
             dernierSignal = -1;
@@ -460,7 +467,7 @@ void parseCommande(const char *line) {
         radio.startListening();
         Serial3.println("CMD_SENT:RESET_ALL");
 
-        envoyerSon(201);
+        envoyerSon(201, 0);
         flashDmxStartVert();
         ledPulse(150);
 
@@ -480,7 +487,7 @@ void parseCommande(const char *line) {
         radio.startListening();
         Serial3.println("CMD_SENT:RELANCE_PARTIEL");
 
-        envoyerSon(202);
+        envoyerSon(202, 0);
         flashDmxStartRouge();
         ledPulse(150);
 

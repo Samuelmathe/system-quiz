@@ -19,11 +19,20 @@ SoftwareSerial mySoftwareSerial(5, 4); // RX=D5, TX=D4
 DFRobotDFPlayerMini monLecteurMP3;
 
 // =========================================================
-// FICHIERS MP3 SUR CARTE SD
+// FICHIERS MP3 SUR CARTE SD (dossier /mp3/ sur carte microSD DFPlayer)
 // =========================================================
-// mp3/0001.mp3 → Son BUZZ équipe
+// mp3/0001.mp3 → Son BUZZ générique / repli si pas de son équipe
 // mp3/0002.mp3 → Son VICTOIRE (bonne réponse)
 // mp3/0003.mp3 → Son ÉCHEC (mauvaise réponse)
+// mp3/0101.mp3 → BUZZ équipe 1 (optionnel ; comme equipe_1.mp3 sur le PC)
+// mp3/0102.mp3 → BUZZ équipe 2 … jusqu’à 0130 équipe 30
+
+// Réception depuis la Mega (aligné avec mega30Equipe.ino)
+struct SonPayload {
+    uint16_t cmd;
+    uint8_t team;  // 1..30 sur buzz ; 0 sinon
+    uint8_t reserved;
+};
 
 // =========================================================
 // VARIABLES
@@ -71,7 +80,7 @@ void setup() {
 
     // Vider buffer radio
     delay(100);
-    int poubelle;
+    SonPayload poubelle;
     while (radio.available()) { radio.read(&poubelle, sizeof(poubelle)); }
 }
 
@@ -89,8 +98,8 @@ void loop() {
 
     // RÉCEPTION RADIO (uniquement depuis la Mega)
     if (radioOK && radio.available()) {
-        int signal = 0;
-        radio.read(&signal, sizeof(signal));
+        SonPayload p = {0, 0, 0};
+        radio.read(&p, sizeof(p));
 
         // Clignotement = signal reçu
         digitalWrite(LED_BUILTIN, HIGH); delay(50);
@@ -99,23 +108,27 @@ void loop() {
         if (!mp3OK) return;
 
         // =====================================================
-        // 200 = Buzz valide → 0001.mp3
+        // 200 = Buzz valide → son d’équipe (0101..0130) ou 0001 par défaut
         // =====================================================
-        if (signal == 200) {
-            monLecteurMP3.play(1);
+        if (p.cmd == 200) {
+            if (p.team >= 1 && p.team <= 30) {
+                monLecteurMP3.play(100 + p.team);
+            } else {
+                monLecteurMP3.play(1);
+            }
         }
 
         // =====================================================
         // 201 = Bonne réponse → 0002.mp3
         // =====================================================
-        else if (signal == 201) {
+        else if (p.cmd == 201) {
             monLecteurMP3.play(2);
         }
 
         // =====================================================
         // 202 = Mauvaise réponse → 0003.mp3
         // =====================================================
-        else if (signal == 202) {
+        else if (p.cmd == 202) {
             monLecteurMP3.play(3);
         }
     }
