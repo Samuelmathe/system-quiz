@@ -1,0 +1,102 @@
+name: Build Quiz Board V6
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install dearpygui pyserial pygame pyinstaller
+
+    - name: Verify script imports (py_compile)
+      shell: bash
+      run: |
+        python -m py_compile interface/interface_30eq.py
+
+    - name: Ensure sounds directory exists
+      shell: bash
+      run: |
+        python -c "import os; os.makedirs('interface/sounds', exist_ok=True)"
+    
+    - name: Build with PyInstaller
+      shell: bash
+      run: |
+        pyinstaller --onefile --windowed --name="QuizBoardV6" --hidden-import=serial.tools.list_ports --hidden-import=serial.tools.list_ports_windows --add-data="interface/sounds;sounds" interface/interface_30eq.py
+    
+    - name: Upload Windows executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuizBoardV6-Windows
+        path: dist/QuizBoardV6.exe
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      shell: bash
+      run: |
+        python -m pip install --upgrade pip
+        pip install dearpygui pyserial pygame pyinstaller
+
+    - name: Verify script imports (py_compile)
+      shell: bash
+      run: |
+        python -m py_compile interface/interface_30eq.py
+
+    - name: Ensure sounds directory exists
+      shell: bash
+      run: |
+        python -c "import os; os.makedirs('interface/sounds', exist_ok=True)"
+    
+    - name: Build with PyInstaller
+      shell: bash
+      run: |
+        pyinstaller --onefile --windowed --name="QuizBoardV6" --hidden-import=serial.tools.list_ports --hidden-import=serial.tools.list_ports_posix --add-data="interface/sounds:sounds" interface/interface_30eq.py
+    
+    - name: Upload macOS executable
+      uses: actions/upload-artifact@v4
+      with:
+        name: QuizBoardV6-macOS
+        path: dist/QuizBoardV6
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - uses: actions/download-artifact@v4
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          QuizBoardV6-Windows/QuizBoardV6.exe
+          QuizBoardV6-macOS/QuizBoardV6
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
