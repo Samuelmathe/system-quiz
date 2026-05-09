@@ -158,6 +158,15 @@ class QuizController:
                 except:
                     pass
 
+    def arreter_sons(self):
+        """Coupe tous les sons (canaux) — utile quand buzz équipe passe à victoire/échec."""
+        if not PYGAME_OK:
+            return
+        try:
+            pygame.mixer.stop()
+        except Exception:
+            pass
+    
     def jouer_son(self, son):
         """Joue un son en arrière plan sans bloquer l'interface"""
         if not PYGAME_OK or son is None:
@@ -335,7 +344,8 @@ class QuizController:
         self.add_log(f"Bonne reponse ! +{self.question_value} pts Equipe {team_id+1}", 
                     color=[0, 255, 0])
         
-        # Son victoire
+        # Arrêter le buzz / son équipe en cours puis jouer la victoire
+        self.arreter_sons()
         self.jouer_son(self.son_victoire)
         
         if self.serial_connection and self.serial_connection.is_open:
@@ -352,7 +362,8 @@ class QuizController:
         
         self.add_log(f"Mauvaise reponse Equipe {self.current_team+1}", color=[255, 100, 0])
         
-        # Son echec
+        # Arrêter le buzz / son équipe en cours puis jouer l'échec
+        self.arreter_sons()
         self.jouer_son(self.son_echec)
         
         if self.serial_connection and self.serial_connection.is_open:

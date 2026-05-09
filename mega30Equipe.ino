@@ -73,6 +73,60 @@ inline void ledUpdate() {
 char serialBuf[SERIAL_BUF_LEN];
 uint8_t serialLen = 0;
 
+void setProjecteur(int addr, int r, int g, int b);
+void eteindreLumieres();
+void flashDmxUpdate();
+void flashDmxStartVert();
+void flashDmxStartRouge();
+
+// ---- Clignotement DMX validation/refus (non-bloquant, même effet visible salle) ----
+#define FLASH_DMX_HALF_MS 150
+#define FLASH_DMX_STEPS   6  // 3 x (couleur + noir)
+static uint8_t flashDmxMode = 0;  // 0=inactif, 1=vert, 2=rouge
+static uint8_t flashDmxStep = 0;
+static unsigned long flashDmxNextMs = 0;
+
+void flashDmxStartVert() {
+    flashDmxMode = 1;
+    flashDmxStep = 0;
+    flashDmxNextMs = millis();
+}
+
+void flashDmxStartRouge() {
+    flashDmxMode = 2;
+    flashDmxStep = 0;
+    flashDmxNextMs = millis();
+}
+
+void flashDmxUpdate() {
+    if (flashDmxMode == 0) return;
+    unsigned long now = millis();
+    if ((long)(now - flashDmxNextMs) < 0) return;
+
+    bool vert = (flashDmxMode == 1);
+    // Même séquence que l’ancien clignoterVert/Rouge : éteint → couleur → éteint → …
+    if (flashDmxStep % 2 == 0) {
+        eteindreLumieres();
+        for (int p = 0; p < 30; p++) {
+            int addr = settings.adressesDMX[p];
+            if (addr > 0 && addr <= 512) {
+                if (vert) setProjecteur(addr, 0, 255, 0);
+                else       setProjecteur(addr, 255, 0, 0);
+            }
+        }
+    } else {
+        eteindreLumieres();
+    }
+    flashDmxStep++;
+    if (flashDmxStep >= FLASH_DMX_STEPS) {
+        flashDmxMode = 0;
+        flashDmxStep = 0;
+        eteindreLumieres();
+    } else {
+        flashDmxNextMs = now + FLASH_DMX_HALF_MS;
+    }
+}
+
 // ---- BUZZ SIMULTANÉS - Fenêtre 50ms ----
 #define FENETRE_MS   50
 #define MAX_BUFFER    8
@@ -218,6 +272,7 @@ void loop() {
 
     wdt_reset();
     ledUpdate();
+    flashDmxUpdate();
 
     // Traiter fenêtre expirée
     if (fenetreActive && millis() - debutFenetre >= FENETRE_MS) {
@@ -331,9 +386,9 @@ void loop() {
             jeuVerrouille = false;
             dernierSignal = -1;
 
-            // Retirer les clignotements DMX bloquants: juste feedback LED
+            // Clignotement vert sur tous les projecteurs (non-bloquant)
+            flashDmxStartVert();
             ledPulse(150);
-            eteindreLumieres();
 
             int poubelle;
             while (radio.available()) { radio.read(&poubelle, sizeof(poubelle)); }
@@ -348,9 +403,9 @@ void loop() {
             jeuVerrouille = false;
             dernierSignal = -1;
 
-            // Retirer les clignotements DMX bloquants: juste feedback LED
+            // Clignotement rouge sur tous les projecteurs (non-bloquant)
+            flashDmxStartRouge();
             ledPulse(150);
-            eteindreLumieres();
 
             int poubelle;
             while (radio.available()) { radio.read(&poubelle, sizeof(poubelle)); }
@@ -406,8 +461,8 @@ void parseCommande(const char *line) {
         Serial3.println("CMD_SENT:RESET_ALL");
 
         envoyerSon(201);
+        flashDmxStartVert();
         ledPulse(150);
-        eteindreLumieres();
 
         for (int i = 0; i < 31; i++) dejaJoue[i] = false;
         jeuVerrouille = false;
@@ -426,8 +481,8 @@ void parseCommande(const char *line) {
         Serial3.println("CMD_SENT:RELANCE_PARTIEL");
 
         envoyerSon(202);
+        flashDmxStartRouge();
         ledPulse(150);
-        eteindreLumieres();
 
         jeuVerrouille = false;
         dernierSignal = -1;
@@ -519,29 +574,11 @@ void eteindreLumieres() {
 }
 
 void clignoterVert() {
-    for (int n = 0; n < 3; n++) {
-        eteindreLumieres();
-        for (int p = 0; p < 30; p++) {
-            int addr = settings.adressesDMX[p];
-            if (addr > 0 && addr <= 512) setProjecteur(addr, 0, 255, 0);
-        }
-        delay(150); // Réduit de 300ms à 150ms
-        eteindreLumieres();
-        delay(150); // Réduit de 300ms à 150ms
-    }
+    flashDmxStartVert();
 }
 
 void clignoterRouge() {
-    for (int n = 0; n < 3; n++) {
-        eteindreLumieres();
-        for (int p = 0; p < 30; p++) {
-            int addr = settings.adressesDMX[p];
-            if (addr > 0 && addr <= 512) setProjecteur(addr, 255, 0, 0);
-        }
-        delay(150); // Réduit de 300ms à 150ms
-        eteindreLumieres();
-        delay(150); // Réduit de 300ms à 150ms
-    }
+    flashDmxStartRouge();
 }
 
 void allumerCouleurEquipe(int equipe) {
