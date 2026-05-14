@@ -35,7 +35,7 @@ static void dfPlayTrack(DFRobotDFPlayerMini &df, uint8_t track) {
         radio.stopListening();
         delay(3);
     }
-    df.play(track);
+    df.playMp3Folder((int)track);
     if (radioOK) {
         delay(5);
         radio.startListening();

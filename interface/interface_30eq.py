@@ -111,6 +111,11 @@ class QuizController:
         self.serial_connection: Optional[serial.Serial] = None
         self.serial_running = False
         self.serial_thread: Optional[threading.Thread] = None
+        # "mega" = dongle TTL Mega : BUZZ + scores + sons logiciel (pygame) ; sans nano USB necessaire.
+        # "nano_son" = Nano USB : scores + sons PC si AUDIO_PC (HP DF debranche) ; sinon sons sur DFPlayer.
+        self.serial_device_kind: str = "mega"
+        # Nano branché : True = Mega envoie toujours la radio au Nano, mais le DF ne joue pas — le PC joue (pygame) via FWD_SON:.
+        self.nano_audio_on_pc: bool = False
         
         # Interface
         self.theme_id: Optional[str] = None
@@ -184,6 +189,25 @@ class QuizController:
         except Exception as e:
             print(f"Erreur chargement sons: {e}")
 
+    def _son_buzz_equipe(self, team_id: int):
+        """Son dédié buzz : ``sounds/equipe_{N}.mp3`` avec N = numéro équipe affiché (1..30). Chargement paresseux."""
+        if not PYGAME_OK:
+            return None
+        if team_id in self.sons_equipes:
+            return self.sons_equipes[team_id]
+        n = team_id + 1
+        if n < 1 or n > 30:
+            return None
+        path = os.path.join(self.sounds_dir, f"equipe_{n}.mp3")
+        if not os.path.exists(path):
+            return None
+        try:
+            snd = pygame.mixer.Sound(path)
+            self.sons_equipes[team_id] = snd
+            return snd
+        except Exception:
+            return None
+
     def _recharger_sons_equipes(self):
         """Recharge uniquement les sons équipes (utile si le client ajoute des fichiers)"""
         if not PYGAME_OK:
@@ -198,8 +222,27 @@ class QuizController:
                 except Exception:
                     pass
 
+    def _audio_use_external_df(self) -> bool:
+        """True = envoyer les sons vers le DFPlayer (SON: / STOP). Faux si Mega ou Nano en mode haut-parleurs PC."""
+        if not self.serial_connection or not self.serial_connection.is_open:
+            return False
+        if getattr(self, "serial_device_kind", "mega") != "nano_son":
+            return False
+        return not getattr(self, "nano_audio_on_pc", True)
+
+    def _serial_write_line(self, data: bytes) -> None:
+        if not self.serial_connection or not self.serial_connection.is_open:
+            return
+        try:
+            self.serial_connection.write(data)
+            self.serial_connection.flush()
+        except Exception:
+            pass
+
     def arreter_sons(self):
         """Coupe tous les sons (canaux) — utile quand buzz équipe passe à victoire/échec."""
+        if self._audio_use_external_df():
+            self._serial_write_line(b"STOP\n")
         if not PYGAME_OK:
             return
         try:
@@ -209,6 +252,8 @@ class QuizController:
     
     def jouer_son(self, son):
         """Joue un son en arrière plan sans bloquer l'interface"""
+        if self._audio_use_external_df():
+            return
         if not PYGAME_OK or son is None:
             return
         try:
@@ -216,11 +261,44 @@ class QuizController:
         except Exception:
             pass
     
+    def _play_fwd_son_line(self, line: str):
+        """Buzz depuis la Mega (radio → Nano, mode PC) : même effet qu'un BUZZ: (état + sons).
+        201 / 202 (valider / refuser côté Mega) : si une équipe est BUZZÉE, même traitement que les boutons PC
+        (points + état), sans renvoyer RESET/RELANCE au série (from_hardware=True). Sinon son seul."""
+        if getattr(self, "serial_device_kind", "mega") != "nano_son":
+            return
+        if not getattr(self, "nano_audio_on_pc", False):
+            return
+        try:
+            parts = line.strip().split(":")
+            if len(parts) >= 3 and parts[1] == "200" and parts[2].isdigit():
+                team_1 = int(parts[2])
+                tid = team_1 - 1
+                if 0 <= tid < len(self.teams):
+                    self.handle_buzz(tid)
+                return
+            if len(parts) >= 2 and parts[1] == "201":
+                if self.state == GameState.BUZZED and self.current_team is not None:
+                    self.handle_correct_answer(from_hardware=True)
+                elif PYGAME_OK:
+                    self.jouer_son(self.son_victoire)
+                return
+            if len(parts) >= 2 and parts[1] == "202":
+                if self.state == GameState.BUZZED:
+                    self.handle_wrong_answer(from_hardware=True)
+                elif PYGAME_OK:
+                    self.jouer_son(self.son_echec)
+                return
+        except (ValueError, IndexError, TypeError):
+            pass
+
     def load_config(self):
         default_config = {
             "nb_equipes": 8,
             "auto_save": True,
-            "last_scores": {}
+            "last_scores": {},
+            # Points ajoutés à l'équipe dès le buzz (0 = désactivé ; la bonne réponse ajoute encore question_value).
+            "points_au_buzz": 0,
         }
         
         if os.path.exists(self.config_file):
@@ -333,12 +411,12 @@ class QuizController:
     def correct_answer_callback(self, sender, app_data, user_data):
         team_id = user_data
         if self.state == GameState.BUZZED and self.current_team == team_id:
-            self.handle_correct_answer()
+            self.handle_correct_answer(from_hardware=False)
     
     def wrong_answer_callback(self, sender, app_data, user_data):
         team_id = user_data
         if self.state == GameState.BUZZED and self.current_team == team_id:
-            self.handle_wrong_answer()
+            self.handle_wrong_answer(from_hardware=False)
     
     # =====================================================
     # 2.4 LOGIQUE DE JEU
@@ -363,19 +441,31 @@ class QuizController:
         self.state = GameState.BUZZED
         self.current_team = team_id
         self.banned_teams.append(team_id)
+
+        buzz_pts = int(self.config.get("points_au_buzz", 0) or 0)
+        if buzz_pts > 0:
+            self.update_team_score(team_id, buzz_pts)
+            self.add_log(
+                f"Buzz comptabilise : +{buzz_pts} pt(s) — Equipe {team_id + 1}",
+                color=[160, 255, 140],
+            )
         
-        # Son buzz : son spécifique équipe si disponible, sinon son général
-        if team_id in self.sons_equipes:
-            self.jouer_son(self.sons_equipes[team_id])
+        # Son buzz : Nano DF (SON:200) ou PC — priorité ``equipe_N.mp3`` puis buzz.mp3
+        if self._audio_use_external_df():
+            self._serial_write_line(f"SON:200:{team_id + 1}\n".encode("ascii", errors="replace"))
         else:
-            self.jouer_son(self.son_buzz)
+            son_eq = self._son_buzz_equipe(team_id)
+            if son_eq is not None:
+                self.jouer_son(son_eq)
+            else:
+                self.jouer_son(self.son_buzz)
         
         self.update_game_display()
         self.show_validation_buttons(team_id, True)
         
-        self.add_log(f"Equipe {team_id+1} a buzze !", color=[255, 255, 0])
-    
-    def handle_correct_answer(self):
+        self.add_log(f"Equipe {team_id + 1} a buzze ! (id equipe {team_id + 1})", color=[255, 255, 0])
+
+    def handle_correct_answer(self, from_hardware: bool = False):
         if self.state != GameState.BUZZED or self.current_team is None:
             return
         
@@ -386,9 +476,10 @@ class QuizController:
         
         # Arrêter le buzz / son équipe en cours puis jouer la victoire
         self.arreter_sons()
-        self.jouer_son(self.son_victoire)
+        if not self._audio_use_external_df():
+            self.jouer_son(self.son_victoire)
         
-        if self.serial_connection and self.serial_connection.is_open:
+        if self.serial_connection and self.serial_connection.is_open and not from_hardware:
             try:
                 self.serial_connection.write(b"RESET_ALL\n")
             except Exception:
@@ -396,17 +487,19 @@ class QuizController:
         
         self.reset_question()
     
-    def handle_wrong_answer(self):
+    def handle_wrong_answer(self, from_hardware: bool = False):
         if self.state != GameState.BUZZED:
             return
         
-        self.add_log(f"Mauvaise reponse Equipe {self.current_team+1}", color=[255, 100, 0])
+        tid = self.current_team
+        self.add_log(f"Mauvaise reponse Equipe {tid + 1}", color=[255, 100, 0])
         
         # Arrêter le buzz / son équipe en cours puis jouer l'échec
         self.arreter_sons()
-        self.jouer_son(self.son_echec)
+        if not self._audio_use_external_df():
+            self.jouer_son(self.son_echec)
         
-        if self.serial_connection and self.serial_connection.is_open:
+        if self.serial_connection and self.serial_connection.is_open and not from_hardware:
             try:
                 self.serial_connection.write(b"RELANCE_PARTIEL\n")
             except Exception:
@@ -620,6 +713,7 @@ class QuizController:
     
     def connect_serial(self, port_name: str):
         self.disconnect_serial()
+        self.serial_device_kind = "mega"
         
         try:
             self.add_log(f"Connexion a {port_name}...", color=[255, 200, 0])
@@ -634,7 +728,19 @@ class QuizController:
             time.sleep(2.0)
             self.serial_connection.reset_input_buffer()
 
-            # Connexion directe sans vérification IDENT
+            self._serial_write_line(b"WHO\n")
+            deadline = time.time() + 1.0
+            rx = b""
+            while time.time() < deadline:
+                n = self.serial_connection.in_waiting
+                if n:
+                    rx += self.serial_connection.read(n)
+                if b"READY_NANO_SON" in rx:
+                    self.serial_device_kind = "nano_son"
+                    break
+                time.sleep(0.03)
+
+            # Connexion directe sans vérification IDENT (Mega ne répond pas à WHO)
             self.serial_running = True
             self.serial_thread = threading.Thread(
                 target=self._serial_listener_worker,
@@ -642,8 +748,24 @@ class QuizController:
             )
             self.serial_thread.start()
             self.add_log(f"Connecte a {port_name}", color=[0, 255, 0])
-            self.update_connection_status(f"CONNECTE ({port_name})", True)
-            self.add_log("Mega: PC sur Serial3 via cable USB-TTL (14/15), 9600 — choisir le COM du dongle TTL.", color=[120, 200, 255])
+            if self.serial_device_kind == "nano_son":
+                self.nano_audio_on_pc = True
+                self.update_connection_status(f"NANO SON ({port_name})", True)
+                self.add_log(
+                    "Nano USB : la Mega continue d'envoyer les sons par radio ; "
+                    "haut-parleurs PC par défaut (DFPlayer muet — pas de double son).",
+                    color=[120, 200, 255],
+                )
+                self._serial_write_line(b"AUDIO_PC\n")
+                if dpg.does_item_exist("chk_nano_pc_audio"):
+                    dpg.configure_item("chk_nano_pc_audio", show=True)
+                    dpg.set_value("chk_nano_pc_audio", True)
+            else:
+                self.update_connection_status(f"MEGA / TTL ({port_name})", True)
+                self.add_log(
+                    "Mega : PC sur Serial3 via cable USB-TTL (14/15), 9600 — ou port USB carte si PC_SERIAL=Serial.",
+                    color=[120, 200, 255],
+                )
             return True
                 
         except Exception as e:
@@ -652,12 +774,25 @@ class QuizController:
     
     def disconnect_serial(self):
         self.serial_running = False
+        kind = getattr(self, "serial_device_kind", "mega")
+        if self.serial_connection and self.serial_connection.is_open:
+            try:
+                if kind == "nano_son":
+                    self.serial_connection.write(b"AUDIO_DF\n")
+                    self.serial_connection.flush()
+                    time.sleep(0.06)
+            except Exception:
+                pass
+        self.serial_device_kind = "mega"
+        self.nano_audio_on_pc = False
         if self.serial_connection:
             try:
                 self.serial_connection.close()
             except Exception:
                 pass
             self.serial_connection = None
+        if dpg.does_item_exist("chk_nano_pc_audio"):
+            dpg.configure_item("chk_nano_pc_audio", show=False)
         self.update_connection_status("DECONNECTE", False)
     
     def _serial_listener_worker(self):
@@ -703,11 +838,13 @@ class QuizController:
         elif "CMD_SENT:RESET_ALL" in line or "BUTTON:VALIDER" in line:
             self.add_log("Bouton VALIDER", color=[0, 255, 0])
             if self.state == GameState.BUZZED and self.current_team is not None:
-                self.handle_correct_answer()
+                self.handle_correct_answer(from_hardware=True)
         elif "CMD_SENT:RELANCE_PARTIEL" in line or "BUTTON:FAUX" in line:
             self.add_log("Bouton FAUX", color=[255, 100, 0])
             if self.state == GameState.BUZZED:
-                self.handle_wrong_answer()
+                self.handle_wrong_answer(from_hardware=True)
+        elif line.startswith("FWD_SON:"):
+            self._play_fwd_son_line(line)
     
     # =====================================================
     # 2.7 INTERFACE UTILISATEUR
@@ -767,6 +904,13 @@ class QuizController:
                 dpg.add_button(label="Actualiser", callback=self.refresh_ports_callback, width=80)
                 dpg.add_button(label="CONNECTER", tag="btn_connect", callback=self.connect_callback, width=100)
                 dpg.add_text("", tag="txt_connection_status", color=[255, 50, 50])
+            dpg.add_checkbox(
+                tag="chk_nano_pc_audio",
+                label="Nano : sons sur le PC (DF muet — la Mega continue la radio, un seul son)",
+                default_value=True,
+                show=False,
+                callback=self.nano_pc_audio_callback,
+            )
             
             dpg.add_spacer(height=5)
             
@@ -1051,6 +1195,16 @@ class QuizController:
             self.add_log(f"Valeur: {self.question_value} pts", color=[100, 200, 255])
         except (TypeError, ValueError):
             pass
+
+    def nano_pc_audio_callback(self, sender, app_data):
+        """Nano connecte : bascule AUDIO_PC (pygame + FWD_SON) / AUDIO_DF (lecteur SD)."""
+        use_pc = bool(app_data)
+        self.nano_audio_on_pc = use_pc
+        self._serial_write_line(b"AUDIO_PC\n" if use_pc else b"AUDIO_DF\n")
+        if use_pc:
+            self.add_log("Sons sur le PC — DFPlayer muet sur le Nano", color=[100, 220, 180])
+        else:
+            self.add_log("Sons sur DFPlayer (carte SD)", color=[255, 200, 120])
     
     # ========== FONCTION DE LOG AUTO-NETTOYANTE ==========
     def add_log(self, message: str, color: Tuple[int, int, int] = (200, 200, 200)):
@@ -1085,6 +1239,13 @@ def main():
         controller.add_log("Pygame absent — pas de sons PC (pip install pygame).", color=[255, 140, 80])
     elif controller.son_buzz is None:
         controller.add_log(f"Pas de buzz.mp3 — placer les MP3 dans: {controller.sounds_dir}", color=[255, 180, 100])
+
+    bp = int(controller.config.get("points_au_buzz", 0) or 0)
+    if bp > 0:
+        controller.add_log(
+            f"Points au buzz : +{bp} pt(s) par equipe qui buzze (quiz_board_config.json → points_au_buzz).",
+            color=[160, 220, 255],
+        )
 
     ports = controller.scan_serial_ports()
     if ports:

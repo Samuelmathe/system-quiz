@@ -16,6 +16,8 @@ Ce dossier contient :
   - `configuration/config_final_30.py` : outil de configuration (équipes / DMX / sync MEGA)
   - `interface/interface_30eq.py` : interface “quiz board” (scores/buzz + série)
 
+**Modes d’utilisation (sans PC / PC+Mega / PC+nano son)** : voir [MODES.md](MODES.md).
+
 ## Prérequis
 
 - Python 3.9+ recommandé

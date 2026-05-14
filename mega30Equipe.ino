@@ -228,18 +228,18 @@ void envoyerSon(uint16_t cmd, uint8_t team) {
     wdt_reset();
     SonPayload p = { cmd, team, 0 };
     radio.stopListening();
-    delayMicroseconds(200);
+    delayMicroseconds(400);
     radio.openWritingPipe(adresseSon);
-    // Nano son en AutoAck=false : pas d'ACK -> write(..., true) = paquet NO_ACK (evite MAX_RT / echec write).
+    // Nano son en PRX sans AutoAck : emission NO_ACK (write(..., true)).
+    // Buzz (200) : un seul envoi pour eviter double lecture / double son sur le nano.
+    // 201 / 202 : 2 copies ~8 ms (fiabilite sans risquer deux buzzs).
     radio.setAutoAck(false);
     radio.write(&p, sizeof(p), true);
-    /* Double envoi seulement pour 201/202 : le buzz (200) part en une fois — doubler 200 + dedupe
-     * Nano sur 201/202 faisait rejeter le 2e 200 et cas d'ecoute perdaient tout le buzz. */
     if (cmd != 200) {
-        delay(8);
+        delayMicroseconds(8000);
         radio.write(&p, sizeof(p), true);
     }
-    delayMicroseconds(300);
+    delayMicroseconds(400);
     radio.setAutoAck(true);
     radio.openWritingPipe(adresseBuzzers);
     radio.startListening();
