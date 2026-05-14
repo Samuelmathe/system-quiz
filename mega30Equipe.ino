@@ -69,11 +69,13 @@ static bool lastSeqInitCmd = false;
 static uint16_t seqOutboundCmd = 0;
 
 static void radioSendCmdToBuzzers(uint8_t value) {
+    wdt_reset();
     RadioMsg msg = {2, value, ++seqOutboundCmd};
     radio.stopListening();
     radio.openWritingPipe(adresseBuzzers);
     radio.write(&msg, sizeof(msg));
     radio.startListening();
+    wdt_reset();
 }
 
 // ---- LED non-bloquante (pulse) ----
@@ -211,7 +213,7 @@ void initialiserConfigParDefaut() {
 }
 
 // =========================================================
-// ENVOI SIGNAL AU NANO SON
+// ENVOI SIGNAL AU NANO SON (récepteur : nano_son_final.ino, CE=9 CSN=10)
 // 200 = buzz valide (team = numero equipe 1..30 pour son dedicace)
 // 201 = bonne réponse (team = 0)
 // 202 = mauvaise réponse (team = 0)
@@ -223,21 +225,32 @@ struct SonPayload {
 };
 
 void envoyerSon(uint16_t cmd, uint8_t team) {
+    wdt_reset();
     SonPayload p = { cmd, team, 0 };
     radio.stopListening();
+    delayMicroseconds(200);
     radio.openWritingPipe(adresseSon);
-    // Le Nano son est en AutoAck=false -> envoi "fire and forget"
+    // Nano son en AutoAck=false : pas d'ACK -> write(..., true) = paquet NO_ACK (evite MAX_RT / echec write).
     radio.setAutoAck(false);
-    radio.write(&p, sizeof(p));
+    radio.write(&p, sizeof(p), true);
+    /* Double envoi seulement pour 201/202 : le buzz (200) part en une fois — doubler 200 + dedupe
+     * Nano sur 201/202 faisait rejeter le 2e 200 et cas d'ecoute perdaient tout le buzz. */
+    if (cmd != 200) {
+        delay(8);
+        radio.write(&p, sizeof(p), true);
+    }
+    delayMicroseconds(300);
     radio.setAutoAck(true);
     radio.openWritingPipe(adresseBuzzers);
     radio.startListening();
+    wdt_reset();
 }
 
 // =========================================================
 // SETUP
 // =========================================================
 void setup() {
+    /* Max ~8 s sans wdt_reset() -> reset CPU (pas de « veille » Arduino : souvent WDT, USB PC, ou alim). */
     wdt_enable(WDTO_8S);
     pinMode(LED, OUTPUT);
 
@@ -319,7 +332,10 @@ void loop() {
         fenetreActive = false;
         nbBuffer = 0;
         RadioMsg p;
-        while (radio.available()) { radio.read(&p, sizeof(p)); }
+        for (int drain = 0; drain < 64 && radio.available(); drain++) {
+            radio.read(&p, sizeof(p));
+            if ((drain & 15) == 15) wdt_reset();
+        }
     }
 
     // BATTEMENT LED toutes les 2 secondes (non-bloquant)
@@ -334,7 +350,8 @@ void loop() {
     }
 
     // RÉCEPTION série PC - non bloquant, sans String
-    while (PC_SERIAL.available() > 0) {
+    for (uint16_t serDrain = 0; serDrain < 512 && PC_SERIAL.available() > 0; serDrain++) {
+        if ((serDrain & 31) == 0) wdt_reset();
         char c = (char)PC_SERIAL.read();
         if (c == '\r') continue;
         if (c == '\n') {
@@ -347,6 +364,7 @@ void loop() {
             while (serialBuf[start] == ' ' || serialBuf[start] == '\t') start++;
             if (serialLen > start) {
                 parseCommande(serialBuf + start);
+                wdt_reset();
             }
             serialLen = 0;
         } else {
@@ -428,7 +446,10 @@ void loop() {
                 ledPulse(150);
 
                 RadioMsg poubelle;
-                while (radio.available()) { radio.read(&poubelle, sizeof(poubelle)); }
+                for (int d = 0; d < 64 && radio.available(); d++) {
+                    radio.read(&poubelle, sizeof(poubelle));
+                    if ((d & 15) == 15) wdt_reset();
+                }
             }
 
             // 88 = RELANCE_PARTIEL (Nano animateur mauvaise réponse)
@@ -445,7 +466,10 @@ void loop() {
                 ledPulse(150);
 
                 RadioMsg poubelle;
-                while (radio.available()) { radio.read(&poubelle, sizeof(poubelle)); }
+                for (int d = 0; d < 64 && radio.available(); d++) {
+                    radio.read(&poubelle, sizeof(poubelle));
+                    if ((d & 15) == 15) wdt_reset();
+                }
             }
         }
     }
@@ -486,12 +510,14 @@ static uint8_t parse_colon_ints(const char *s, int *out, uint8_t maxCount) {
 }
 
 void parseCommande(const char *line) {
+    wdt_reset();
 
     // ---- LOGICIEL SCORES ----
 
     // Bonne réponse via PC (VALIDER)
     if (strcmp(line, "RESET_ALL") == 0) {
         radioSendCmdToBuzzers(99);
+        delay(8);
         PC_SERIAL.println("CMD_SENT:RESET_ALL");
 
         envoyerSon(201, 0);
@@ -508,6 +534,7 @@ void parseCommande(const char *line) {
     // Mauvaise réponse via PC (REFUSER)
     else if (strcmp(line, "RELANCE_PARTIEL") == 0) {
         radioSendCmdToBuzzers(88);
+        delay(8);
         PC_SERIAL.println("CMD_SENT:RELANCE_PARTIEL");
 
         envoyerSon(202, 0);
@@ -571,6 +598,7 @@ void parseCommande(const char *line) {
     else if (strcmp(line, "SAVE_CONFIG") == 0) {
         settings.magic = MAGIC_NUMBER;
         EEPROM.put(0, settings);
+        wdt_reset();
         PC_SERIAL.println("CONF:SAVED_TO_EEPROM");
     }
 
