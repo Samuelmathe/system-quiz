@@ -23,7 +23,7 @@ try:
     import pygame
     pygame.mixer.init()
     PYGAME_OK = True
-except:
+except Exception:
     PYGAME_OK = False
 
 def get_base_path():
@@ -33,6 +33,18 @@ def get_base_path():
     if getattr(sys, 'frozen', False):
         return os.path.dirname(sys.executable)
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def resolve_sounds_dir(base_path: str) -> str:
+    """Dossier contenant buzz.mp3, etc. Cherche ``sounds/`` à côté du script puis à la racine du projet."""
+    candidates = [
+        os.path.join(base_path, "sounds"),
+        os.path.normpath(os.path.join(base_path, "..", "sounds")),
+    ]
+    for p in candidates:
+        if os.path.isdir(p):
+            return p
+    return candidates[0]
 
 
 def get_assets_dir():
@@ -120,6 +132,7 @@ class QuizController:
         self.son_victoire = None
         self.son_echec    = None
         self.sons_equipes = {}  # {team_id: pygame.Sound}
+        self.sounds_dir = resolve_sounds_dir(self.base_path)
         self._charger_sons()
         
         # Initialisation
@@ -145,7 +158,7 @@ class QuizController:
         if not PYGAME_OK:
             return
         try:
-            sounds_dir = os.path.join(self.base_path, "sounds")
+            sounds_dir = self.sounds_dir
             
             buzz_path     = os.path.join(sounds_dir, "buzz.mp3")
             victoire_path = os.path.join(sounds_dir, "victoire.mp3")
@@ -175,14 +188,14 @@ class QuizController:
         """Recharge uniquement les sons équipes (utile si le client ajoute des fichiers)"""
         if not PYGAME_OK:
             return
-        sounds_dir = os.path.join(self.base_path, "sounds")
+        sounds_dir = self.sounds_dir
         self.sons_equipes = {}
         for i in range(1, 31):
             son_path = os.path.join(sounds_dir, f"equipe_{i}.mp3")
             if os.path.exists(son_path):
                 try:
                     self.sons_equipes[i-1] = pygame.mixer.Sound(son_path)
-                except:
+                except Exception:
                     pass
 
     def arreter_sons(self):
@@ -200,7 +213,7 @@ class QuizController:
             return
         try:
             threading.Thread(target=son.play, daemon=True).start()
-        except:
+        except Exception:
             pass
     
     def load_config(self):
@@ -378,7 +391,7 @@ class QuizController:
         if self.serial_connection and self.serial_connection.is_open:
             try:
                 self.serial_connection.write(b"RESET_ALL\n")
-            except:
+            except Exception:
                 pass
         
         self.reset_question()
@@ -396,7 +409,7 @@ class QuizController:
         if self.serial_connection and self.serial_connection.is_open:
             try:
                 self.serial_connection.write(b"RELANCE_PARTIEL\n")
-            except:
+            except Exception:
                 pass
         
         self.state = GameState.IDLE
@@ -425,7 +438,7 @@ class QuizController:
         if self.serial_connection and self.serial_connection.is_open:
             try:
                 self.serial_connection.write(b"RESET_ALL\n")
-            except:
+            except Exception:
                 pass
         
         self.switch_tab("tab_scores")
@@ -543,9 +556,8 @@ class QuizController:
     
     def update_podium_display(self):
         if self.current_tab == "tab_podium" and dpg.does_item_exist("podium_container"):
-            if dpg.does_item_exist("podium_container"):
-                dpg.delete_item("podium_container", children_only=True)
-                self.create_podium_display()
+            dpg.delete_item("podium_container", children_only=True)
+            self.create_podium_display()
     
     # =====================================================
     # 2.6 COMMUNICATION SERIE
@@ -631,6 +643,7 @@ class QuizController:
             self.serial_thread.start()
             self.add_log(f"Connecte a {port_name}", color=[0, 255, 0])
             self.update_connection_status(f"CONNECTE ({port_name})", True)
+            self.add_log("Mega: PC sur Serial3 via cable USB-TTL (14/15), 9600 — choisir le COM du dongle TTL.", color=[120, 200, 255])
             return True
                 
         except Exception as e:
@@ -642,7 +655,7 @@ class QuizController:
         if self.serial_connection:
             try:
                 self.serial_connection.close()
-            except:
+            except Exception:
                 pass
             self.serial_connection = None
         self.update_connection_status("DECONNECTE", False)
@@ -663,10 +676,10 @@ class QuizController:
                                 try:
                                     decoded = line.decode('utf-8', errors='ignore').strip()
                                     self._process_serial_line(decoded)
-                                except:
+                                except Exception:
                                     pass
                 time.sleep(0.01)
-            except:
+            except Exception:
                 time.sleep(1)
         self.disconnect_serial()
     
@@ -680,7 +693,12 @@ class QuizController:
                 team_id = int(line.split(":")[1]) - 1
                 if 0 <= team_id < len(self.teams):
                     self.handle_buzz(team_id)
-            except:
+                else:
+                    self.add_log(
+                        f"BUZZ equipe {team_id + 1} ignoree (max {len(self.teams)} ici). Verifier EEPROM Mega (nb equipes).",
+                        color=[255, 160, 80],
+                    )
+            except (ValueError, IndexError):
                 pass
         elif "CMD_SENT:RESET_ALL" in line or "BUTTON:VALIDER" in line:
             self.add_log("Bouton VALIDER", color=[0, 255, 0])
@@ -698,31 +716,14 @@ class QuizController:
     def create_dark_theme(self):
         with dpg.theme() as theme:
             with dpg.theme_component(dpg.mvAll):
-                # Fond noir / gris très sombre par défaut (toute l’app hérite via bind_theme)
-                dpg.add_theme_color(dpg.mvThemeCol_Text, (230, 230, 238))
-                dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, (120, 120, 130))
-                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (12, 12, 14))
-                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (18, 18, 22))
-                dpg.add_theme_color(dpg.mvThemeCol_PopupBg, (20, 20, 26))
-                dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, (14, 14, 17))
-                dpg.add_theme_color(dpg.mvThemeCol_TitleBg, (12, 12, 14))
-                dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, (22, 22, 28))
-                dpg.add_theme_color(dpg.mvThemeCol_Border, (48, 48, 62))
-                dpg.add_theme_color(dpg.mvThemeCol_BorderShadow, (0, 0, 0))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (35, 35, 44))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, (42, 42, 54))
-                dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, (48, 48, 62))
-                dpg.add_theme_color(dpg.mvThemeCol_Header, (40, 40, 54))
-                dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, (52, 52, 70))
-                dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, (62, 62, 85))
+                dpg.add_theme_color(dpg.mvThemeCol_WindowBg, (18, 18, 24))
+                dpg.add_theme_color(dpg.mvThemeCol_ChildBg, (25, 25, 32))
+                dpg.add_theme_color(dpg.mvThemeCol_Border, (60, 60, 80))
+                dpg.add_theme_color(dpg.mvThemeCol_FrameBg, (40, 40, 50))
+                dpg.add_theme_color(dpg.mvThemeCol_Text, (220, 220, 230))
                 dpg.add_theme_color(dpg.mvThemeCol_Button, (45, 85, 145))
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonHovered, (60, 110, 190))
                 dpg.add_theme_color(dpg.mvThemeCol_ButtonActive, (40, 70, 120))
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarBg, (16, 16, 20))
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrab, (55, 55, 72))
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabHovered, (72, 72, 92))
-                dpg.add_theme_color(dpg.mvThemeCol_ScrollbarGrabActive, (92, 92, 115))
-                dpg.add_theme_color(dpg.mvThemeCol_CheckMark, (130, 200, 255))
                 dpg.add_theme_style(dpg.mvStyleVar_WindowRounding, 6)
                 dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 4)
         
@@ -731,9 +732,6 @@ class QuizController:
     
     def create_interface(self):
         self.create_dark_theme()
-        # Thème sombre comme défaut Dear PyGui (listes déroulantes, tooltips, éléments hors fenêtre principale)
-        if self.theme_id:
-            dpg.bind_theme(self.theme_id)
         
         with dpg.window(
             tag="main_window",
@@ -744,6 +742,8 @@ class QuizController:
             no_collapse=True,
             no_close=True
         ):
+            if self.theme_id:
+                dpg.bind_item_theme("main_window", self.theme_id)
             
             # ========== EN-TETE ==========
             with dpg.group(horizontal=True):
@@ -1049,7 +1049,7 @@ class QuizController:
         try:
             self.question_value = int(app_data)
             self.add_log(f"Valeur: {self.question_value} pts", color=[100, 200, 255])
-        except:
+        except (TypeError, ValueError):
             pass
     
     # ========== FONCTION DE LOG AUTO-NETTOYANTE ==========
@@ -1059,7 +1059,7 @@ class QuizController:
             timestamp = datetime.now().strftime("%H:%M:%S")
             formatted = f"[{timestamp}] {message}"
             self.log_lines.append(formatted)
-            full_text = "\n".join(list(self.log_lines))
+            full_text = "\n".join(self.log_lines)
             dpg.set_value("txt_console_logs", full_text)
             dpg.set_y_scroll("log_window", -1.0)
 
@@ -1081,8 +1081,10 @@ def main():
     
     controller.add_log("QUIZ BOARD V6 - Demarrage", color=[0, 200, 255])
     controller.add_log(f"{len(controller.teams)} equipes", color=[100, 255, 100])
-    
-    ports = controller.scan_serial_ports()
+    if not PYGAME_OK:
+        controller.add_log("Pygame absent — pas de sons PC (pip install pygame).", color=[255, 140, 80])
+    elif controller.son_buzz is None:
+        controller.add_log(f"Pas de buzz.mp3 — placer les MP3 dans: {controller.sounds_dir}", color=[255, 180, 100])
     if ports:
         display_names = [name for _, name in ports]
         dpg.configure_item("combo_serial_ports", items=display_names)

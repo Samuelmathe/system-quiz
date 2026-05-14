@@ -13,7 +13,7 @@ const int moteurPin  = 3; // Vibreur
 
 #define RADIO_CHANNEL  108
 
-// --- ID DE L'EQUIPE (modifier de 1 a 8) ---
+// --- ID DE L'EQUIPE (1 a 30, aligne avec settings.nbEquipes sur la Mega) ---
 int monEquipe = 3;
 
 // Message radio (doit matcher la MEGA)

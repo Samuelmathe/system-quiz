@@ -1,6 +1,8 @@
+import copy
 import dearpygui.dearpygui as dpg
 import json
 import os
+import queue
 import serial
 import serial.tools.list_ports
 import threading
@@ -12,6 +14,34 @@ import re
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE = os.path.join(BASE_DIR, "config_quiz_pro.json")
 ser = None
+
+# Mises à jour UI depuis le thread de synchro (Dear PyGui : éviter dpg.* hors fil principal)
+_ui_queue = queue.Queue()
+
+
+def schedule_ui(fn):
+    _ui_queue.put(fn)
+
+
+def schedule_progress_bar(step: int, total: int):
+    def fn():
+        if total <= 0 or not dpg.does_item_exist("progress_bar"):
+            return
+        dpg.set_value("progress_bar", step / total)
+
+    schedule_ui(fn)
+
+
+def drain_ui_queue():
+    while True:
+        try:
+            fn = _ui_queue.get_nowait()
+        except queue.Empty:
+            break
+        try:
+            fn()
+        except Exception:
+            pass
 
 def get_clean_ports():
     """Scanne les ports USB sur Windows, Mac et Linux."""
@@ -66,19 +96,39 @@ def load_config():
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            
-            if "dmx_universal" not in data:
-                data["dmx_universal"] = default_structure["dmx_universal"]
-            
-            for eq in data["equipes"]:
-                while len(eq["couleurs"]) < len(data["groupes_dmx"]):
-                    eq["couleurs"].append([255, 255, 255])
-                    
-            return data
-            
-    except (FileNotFoundError, json.JSONDecodeError, Exception) as e:
-        print(f"Erreur config: {e}") 
-        return default_structure
+    except FileNotFoundError:
+        return copy.deepcopy(default_structure)
+    except json.JSONDecodeError as e:
+        print(f"Erreur config JSON: {e}")
+        return copy.deepcopy(default_structure)
+    except Exception as e:
+        print(f"Erreur config: {e}")
+        return copy.deepcopy(default_structure)
+
+    if not isinstance(data, dict):
+        return copy.deepcopy(default_structure)
+
+    if "groupes_dmx" not in data or not isinstance(data["groupes_dmx"], list) or not data["groupes_dmx"]:
+        data["groupes_dmx"] = copy.deepcopy(default_structure["groupes_dmx"])
+    if "equipes" not in data or not isinstance(data["equipes"], list) or not data["equipes"]:
+        data["equipes"] = copy.deepcopy(default_structure["equipes"])
+
+    du = data.get("dmx_universal")
+    if not isinstance(du, dict):
+        data["dmx_universal"] = copy.deepcopy(default_structure["dmx_universal"])
+    else:
+        for k, v in default_structure["dmx_universal"].items():
+            du.setdefault(k, v)
+
+    for eq in data["equipes"]:
+        if not isinstance(eq, dict):
+            continue
+        if "couleurs" not in eq or not isinstance(eq["couleurs"], list):
+            eq["couleurs"] = [[255, 255, 255] for _ in data["groupes_dmx"]]
+        while len(eq["couleurs"]) < len(data["groupes_dmx"]):
+            eq["couleurs"].append([255, 255, 255])
+
+    return data
 
 config = load_config()
 
@@ -162,9 +212,14 @@ def envoyer_configuration_complete():
 
     def thread_sync():
         try:
-            dpg.show_item("progress_group")
-            dpg.set_value("progress_bar", 0.0)
-            log("Synchronisation MEGA...", color=[255, 165, 0])
+            def ui_start():
+                if dpg.does_item_exist("progress_group"):
+                    dpg.show_item("progress_group")
+                if dpg.does_item_exist("progress_bar"):
+                    dpg.set_value("progress_bar", 0.0)
+                log("Synchronisation MEGA...", color=[255, 165, 0])
+
+            schedule_ui(ui_start)
 
             ser.reset_input_buffer()
             time.sleep(0.2)
@@ -175,18 +230,18 @@ def envoyer_configuration_complete():
             trame_patch = f"SET_PATCH:{u['nb_canaux']}:{u['off_dim']}:{u['off_r']}:{u['off_g']}:{u['off_b']}\n"
             ser.write(trame_patch.encode())
             current_step += 1
-            dpg.set_value("progress_bar", current_step / total_steps)
+            schedule_progress_bar(current_step, total_steps)
             time.sleep(0.1)
 
             ser.write(f"SET_NB_EQ:{len(config['equipes'])}\n".encode())
             current_step += 1
-            dpg.set_value("progress_bar", current_step / total_steps)
+            schedule_progress_bar(current_step, total_steps)
             time.sleep(0.1)
 
             for i, grp in enumerate(config["groupes_dmx"]):
                 ser.write(f"SET_ADR:{i}:{grp['adresse']}\n".encode())
                 current_step += 1
-                dpg.set_value("progress_bar", current_step / total_steps)
+                schedule_progress_bar(current_step, total_steps)
                 time.sleep(0.08)
 
             for e_idx, eq in enumerate(config["equipes"]):
@@ -195,17 +250,21 @@ def envoyer_configuration_complete():
                     trame = f"SET_COL:{e_idx+1}:{g_idx}:{r}:{g}:{b}\n"
                     ser.write(trame.encode())
                     current_step += 1
-                    dpg.set_value("progress_bar", current_step / total_steps)
+                    schedule_progress_bar(current_step, total_steps)
                     time.sleep(0.05)
 
             ser.write(b"SAVE_CONFIG\n")
-            log("MEGA SYNCHRONISE !", color=[0, 255, 127])
+            schedule_ui(lambda: log("MEGA SYNCHRONISE !", color=[0, 255, 127]))
             time.sleep(0.5)
             
         except Exception as e:
-            log(f"Erreur synchro : {e}", color=[255, 0, 0])
+            schedule_ui(lambda err=str(e): log(f"Erreur synchro : {err}", color=[255, 0, 0]))
         finally:
-            dpg.hide_item("progress_group")
+            def ui_done():
+                if dpg.does_item_exist("progress_group"):
+                    dpg.hide_item("progress_group")
+
+            schedule_ui(ui_done)
 
     threading.Thread(target=thread_sync, daemon=True).start()
 
@@ -252,7 +311,7 @@ def toggle_connection():
             ser.reset_input_buffer()
             time.sleep(2)
             # Connexion directe sans vérification IDENT
-            log(f"CONNECTE !", color=[0, 255, 127])
+            log(f"CONNECTE ! (Serial3 Mega via TTL, 9600)", color=[0, 255, 127])
             dpg.configure_item("btn_conn", label="DECONNECTER")
             dpg.bind_item_theme("btn_conn", "vert_theme")
         except Exception as e:
@@ -309,6 +368,12 @@ def setup_ui():
             status_label = "DECONNECTER" if (ser and ser.is_open) else "CONNECTER"
             dpg.add_button(label=status_label, tag="btn_conn", callback=toggle_connection, width=150)
             dpg.bind_item_theme("btn_conn", "vert_theme" if (ser and ser.is_open) else "bleu_theme")
+
+        dpg.add_text(
+            "Mega : liaison PC sur Serial3 (USB-TTL 14/15), 9600 — choisir le COM du dongle TTL.",
+            color=[140, 180, 210],
+            wrap=1000,
+        )
 
         dpg.add_spacer(height=10)
         dpg.add_separator()
@@ -390,21 +455,9 @@ def create_themes():
         with dpg.theme_component(dpg.mvAll):
             dpg.add_theme_style(dpg.mvStyleVar_WindowPadding, 15, 15)
             dpg.add_theme_style(dpg.mvStyleVar_FrameRounding, 6)
-            dpg.add_theme_color(dpg.mvThemeCol_Text, [230, 230, 238])
-            dpg.add_theme_color(dpg.mvThemeCol_TextDisabled, [120, 120, 130])
-            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, [12, 12, 14])
-            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, [18, 18, 22])
-            dpg.add_theme_color(dpg.mvThemeCol_PopupBg, [20, 20, 26])
-            dpg.add_theme_color(dpg.mvThemeCol_MenuBarBg, [14, 14, 17])
-            dpg.add_theme_color(dpg.mvThemeCol_TitleBg, [12, 12, 14])
-            dpg.add_theme_color(dpg.mvThemeCol_TitleBgActive, [22, 22, 28])
-            dpg.add_theme_color(dpg.mvThemeCol_Border, [48, 48, 62])
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBg, [35, 35, 44])
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBgHovered, [42, 42, 54])
-            dpg.add_theme_color(dpg.mvThemeCol_FrameBgActive, [48, 48, 62])
-            dpg.add_theme_color(dpg.mvThemeCol_Header, [40, 40, 60])
-            dpg.add_theme_color(dpg.mvThemeCol_HeaderHovered, [52, 52, 75])
-            dpg.add_theme_color(dpg.mvThemeCol_HeaderActive, [62, 62, 90])
+            dpg.add_theme_color(dpg.mvThemeCol_WindowBg, [25, 25, 30])
+            dpg.add_theme_color(dpg.mvThemeCol_ChildBg, [32, 32, 45])
+            dpg.add_theme_color(dpg.mvThemeCol_Header, [50, 50, 100])
     with dpg.theme(tag="vert_theme"):
         with dpg.theme_component(dpg.mvButton):
             dpg.add_theme_color(dpg.mvThemeCol_Button, [30, 140, 70])
@@ -424,13 +477,14 @@ def refresh_ui_full():
 def main():
     dpg.create_context()
     create_themes()
-    dpg.bind_theme("global_theme")
     dpg.create_viewport(title="Quiz Config Mega PRO v2.0", width=1050, height=900)
     setup_ui()
     dpg.setup_dearpygui()
     dpg.show_viewport()
     dpg.set_primary_window("main_window", True)
-    dpg.start_dearpygui()
+    while dpg.is_dearpygui_running():
+        drain_ui_queue()
+        dpg.render_dearpygui_frame()
     dpg.destroy_context()
 
 
