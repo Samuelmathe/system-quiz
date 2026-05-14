@@ -1085,6 +1085,8 @@ def main():
         controller.add_log("Pygame absent — pas de sons PC (pip install pygame).", color=[255, 140, 80])
     elif controller.son_buzz is None:
         controller.add_log(f"Pas de buzz.mp3 — placer les MP3 dans: {controller.sounds_dir}", color=[255, 180, 100])
+
+    ports = controller.scan_serial_ports()
     if ports:
         display_names = [name for _, name in ports]
         dpg.configure_item("combo_serial_ports", items=display_names)
