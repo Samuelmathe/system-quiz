@@ -27,3 +27,7 @@ QuizBoardV6
 Thumbs.db
 .idea/
 .vscode/
+
+# Quiz logger (diagnostics)
+diagnostics/quiz_log_*.txt
+diagnostics/quiz_resume_*.txt
