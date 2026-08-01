@@ -30,3 +30,7 @@ Thumbs.db
 
 # Local Arduino CLI toolchain cache (large, machine-specific)
 .arduino-cli/
+
+# Quiz logger (diagnostics)
+diagnostics/quiz_log_*.txt
+diagnostics/quiz_resume_*.txt

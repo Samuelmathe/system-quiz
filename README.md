@@ -15,6 +15,7 @@ Ce dossier contient :
 - **Python**
   - `configuration/config_final_30.py` : outil de configuration (équipes / DMX / sync MEGA)
   - `interface/interface_30eq.py` : interface “quiz board” (scores/buzz + série)
+  - `diagnostics/quiz_logger.py` : logger de diagnostic (écoute passive d'un port série dédié, en parallèle du logiciel de score — voir [Diagnostics](#diagnostics-quiz_loggerpy))
 
 **Modes d’utilisation (sans PC / PC+Mega / PC+nano son)** : voir [MODES.md](MODES.md).
 
@@ -71,6 +72,23 @@ interface/
 ```
 
 Si `pygame` n’est pas dispo (ou si les fichiers sont absents), l’interface fonctionne, mais sans sons.
+
+## Diagnostics (`quiz_logger.py`)
+
+Outil séparé du logiciel de score : il écoute en **passif** un port série de diagnostic
+(un adaptateur USB-TTL dédié, branché en parallèle sur `PC_SERIAL`/`Serial3` du Mega —
+aucun conflit avec le logiciel de score, qui utilise son propre adaptateur).
+
+Il affiche le flux en direct, enregistre le log complet dans un fichier horodaté, et
+génère un fichier résumé (durée de session, nombre de buzz, freezes/silences détectés,
+redémarrages Mega détectés) pratique à partager pour du support/diagnostic à distance.
+
+```bash
+python3 diagnostics/quiz_logger.py
+```
+
+Un exécutable Windows est aussi généré automatiquement par GitHub Actions à chaque
+modification de ce fichier (voir l'onglet *Actions* du dépôt).
 
 ## Linux : accès au port série Arduino
 
