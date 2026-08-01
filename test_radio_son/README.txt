@@ -41,7 +41,7 @@ Conditions identiques au projet principal :
 - Débit : 250 kbps, CRC 16 bits
 - Paquet : SonPayload = uint16_t cmd + uint8_t team + uint8_t reserved (4 octets)
 - Mega : CE=9, CSN=53  |  Nano : CE=9, CSN=10
-- mega30Equipe : **double** envoi (~8 ms) pour **201 et 202** seulement ; le **200 (buzz)** part
+- megaf : **double** envoi (~8 ms) pour **201 et 202** seulement ; le **200 (buzz)** part
   **une fois** (eviter que le Nano traite le 2e 200 comme doublon et supprime tout le buzz).
   Les Nanos dedoublonnent seulement 201/202 sur ~160 ms.
 

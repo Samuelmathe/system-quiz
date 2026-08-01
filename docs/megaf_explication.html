@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>megaf.ino — Explication par blocs</title>
+<style>
+:root {
+  --bg: #f4f6fa;
+  --card: #fff;
+  --code-bg: #1a2332;
+  --code-fg: #e6edf7;
+  --accent: #1d4ed8;
+  --accent-bg: #dbeafe;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+  --ok: #059669;
+  --warn: #d97706;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  line-height: 1.65;
+}
+header {
+  background: linear-gradient(120deg, #0f172a, #1d4ed8);
+  color: #fff;
+  padding: 2rem 2rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(0,0,0,.2);
+}
+header h1 { margin: 0 0 .35rem; font-size: 1.55rem; }
+header p { margin: 0; opacity: .92; max-width: 52rem; }
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-top: 1rem;
+}
+.toolbar input {
+  flex: 1;
+  min-width: 180px;
+  padding: .5rem .8rem;
+  border: none;
+  border-radius: 8px;
+}
+.toolbar button {
+  padding: .5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-weight: 600;
+  cursor: pointer;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  max-width: 1200px;
+  margin: 0 auto;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+nav {
+  position: sticky;
+  top: 7.5rem;
+  align-self: start;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  font-size: .88rem;
+}
+nav h2 { font-size: .75rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .6rem; }
+nav a {
+  display: block;
+  color: var(--accent);
+  text-decoration: none;
+  padding: .25rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+nav a:hover { text-decoration: underline; }
+main { min-width: 0; }
+.intro {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+.intro h2 { margin-top: 0; color: var(--accent); }
+.flow {
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: Consolas, monospace;
+  font-size: .82rem;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.45;
+}
+.block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+.block.hidden { display: none; }
+.block-head {
+  background: var(--accent-bg);
+  padding: .85rem 1.15rem;
+  border-bottom: 1px solid var(--border);
+}
+.block-head h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #1e40af;
+}
+.block-meta {
+  font-size: .82rem;
+  color: var(--muted);
+  margin-top: .25rem;
+}
+.block-body { padding: 1rem 1.15rem 1.15rem; }
+.block-body h3 {
+  font-size: .95rem;
+  margin: 1rem 0 .4rem;
+  color: var(--accent);
+}
+.block-body h3:first-child { margin-top: 0; }
+.block-body p { margin: .5rem 0; }
+.block-body ul { margin: .4rem 0 .6rem; padding-left: 1.25rem; }
+.block-body li { margin: .25rem 0; }
+pre.code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1rem;
+  border-radius: 8px;
+  overflow-x: auto;
+  font-family: Consolas, Monaco, monospace;
+  font-size: .78rem;
+  line-height: 1.45;
+  margin: .75rem 0;
+  white-space: pre;
+}
+.tag {
+  display: inline-block;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .15rem .45rem;
+  border-radius: 4px;
+  margin-right: .35rem;
+}
+.tag-setup { background: #dcfce7; color: var(--ok); }
+.tag-loop { background: #fef3c7; color: var(--warn); }
+.tag-io { background: #e0e7ff; color: #4338ca; }
+table.cmd {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+  margin: .75rem 0;
+}
+table.cmd th, table.cmd td {
+  border: 1px solid var(--border);
+  padding: .45rem .6rem;
+  text-align: left;
+}
+table.cmd th { background: #f1f5f9; }
+footer {
+  text-align: center;
+  color: var(--muted);
+  padding: 2rem;
+  font-size: .85rem;
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  nav { position: static; }
+}
+@media print {
+  header { position: static; }
+  .toolbar, nav { display: none !important; }
+  .layout { display: block; padding: 0; }
+  pre.code { background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; }
+  .block { break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>megaf.ino — Comprendre le firmware Mega</h1>
+  <p>Documentation  : explication par <strong>blocs de code</strong> (pas ligne par ligne). Arduino Mega — quiz buzzer, DMX, radio, liaison PC.</p>
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Rechercher (DMX, buzz, EEPROM, radio…)">
+    <button type="button" id="btn-print">Exporter PDF (Imprimer)</button>
+  </div>
+</header>
+
+<div class="layout">
+<nav>
+  <h2>Sommaire</h2>
+  <a href="#intro">Introduction</a>
+  <a href="#b-libs">Bibliothèques</a>
+  <a href="#b-materiel">Matériel &amp; constantes</a>
+  <a href="#b-eeprom">Config EEPROM</a>
+  <a href="#b-etat">État du jeu</a>
+  <a href="#b-radio">Protocole radio</a>
+  <a href="#b-led">LED &amp; série PC</a>
+  <a href="#b-flash">Flash DMX</a>
+  <a href="#b-fenetre">Buzz simultanés</a>
+  <a href="#b-defaut">Config usine</a>
+  <a href="#b-son">Envoi son nano</a>
+  <a href="#b-setup">setup()</a>
+  <a href="#b-loop">loop()</a>
+  <a href="#b-parse">Commandes PC</a>
+  <a href="#b-dmx">Fonctions DMX</a>
+  <a href="#b-resume">Résumé flux</a>
+</nav>
+
+<main>
+
+<section class="intro" id="intro">
+  <h2>À quoi sert ce programme ?</h2>
+  <p>La carte <strong>Arduino Mega</strong> est le <strong>cerveau du plateau</strong>. Elle :</p>
+  <ul>
+    <li>reçoit les appuis buzzer des équipes (radio 2,4 GHz) ;</li>
+    <li>allume les projecteurs en couleur DMX ;</li>
+    <li>envoie les événements au PC (<code>BUZZ:3</code>, etc.) ;</li>
+    <li>relaye les sons vers le nano DFPlayer ;</li>
+    <li>reçoit les ordres de l’animateur (valider, refuser, configuration).</li>
+  </ul>
+  <p>Le programme se structure en deux grandes parties :</p>
+  <ul>
+    <li><span class="tag tag-setup">setup()</span> exécuté <em>une fois</em> au démarrage ;</li>
+    <li><span class="tag tag-loop">loop()</span> répété en permanence (plusieurs milliers de fois par seconde).</li>
+  </ul>
+  <div class="flow" id="flow-diagram">Buzz équipe (radio)
+       │
+       ▼
+  Mega : fenêtre 50 ms → choix 1 équipe
+       │
+       ├──► DMX : couleur équipe
+       ├──► PC  : "BUZZ:n" (Quiz Board)
+       └──► Nano : son buzz (cmd 200)
+
+Animateur VALIDER / FAUX (radio ou PC)
+       │
+       ├──► Flash vert (99) ou rouge (88) DMX
+       ├──► Son victoire (201) ou échec (202)
+       └──► PC : CMD_SENT:RESET_ALL ou RELANCE_PARTIEL</div>
+</section>
+
+<article class="block" id="b-libs" data-keywords="include bibliothèque spi rf24 dmx eeprom">
+  <div class="block-head">
+    <h2>1. Bibliothèques incluses</h2>
+    <div class="block-meta">Lignes 1 à 7</div>
+  </div>
+  <div class="block-body">
+<pre class="code">#include &lt;SPI.h&gt;
+#include &lt;nRF24L01.h&gt;
+#include &lt;RF24.h&gt;
+#include &lt;DMXSerial.h&gt;
+#include &lt;EEPROM.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdlib.h&gt;</pre>
+    <p>Ce bloc charge les « boîtes à outils » utilisées plus bas :</p>
+    <ul>
+      <li><strong>SPI / RF24 / nRF24L01</strong> — communication avec le module radio (buzzers sans fil).</li>
+      <li><strong>DMXSerial</strong> — envoi du protocole DMX512 vers les projecteurs.</li>
+      <li><strong>EEPROM</strong> — mémoire permanente pour sauvegarder couleurs, adresses DMX, nombre d’équipes.</li>
+      <li><strong>string.h / stdlib.h</strong> — comparaison de texte et conversion de nombres pour les commandes PC.</li>
+    </ul>
+  </div>
+</article>
+
+<article class="block" id="b-materiel" data-keywords="broche pin ce csn serial3 led canal 108 adresse">
+  <div class="block-head">
+    <h2>2. Configuration matérielle</h2>
+    <div class="block-meta">Lignes 9 à 31</div>
+  </div>
+  <div class="block-body">
+<pre class="code">RF24 radio(9, 53);
+const byte adresseBuzzers[6] = "00001";
+const byte adresseSon[6]     = "00002";
+#define RADIO_CHANNEL  108
+#define LED 13
+#define MAGIC_NUMBER 0xAB
+#define PC_SERIAL Serial3</pre>
+    <ul>
+      <li><strong>radio(9, 53)</strong> — module nRF24 : broche CE = 9, CSN = 53 sur la Mega.</li>
+      <li><strong>« 00001 »</strong> — adresse radio des buzzers et du bouton animateur.</li>
+      <li><strong>« 00002 »</strong> — adresse du nano « son » (DFPlayer).</li>
+      <li><strong>Canal 108</strong> — toutes les cartes du projet utilisent le même canal RF.</li>
+      <li><strong>LED 13</strong> — voyant sur la carte (vie du système, réception radio).</li>
+      <li><strong>MAGIC_NUMBER</strong> — signature pour vérifier que l’EEPROM contient une config valide.</li>
+      <li><strong>PC_SERIAL = Serial3</strong> — liaison PC via adaptateur USB-TTL sur TX3/RX3 (broches 14/15), 9600 bauds. Le port USB natif reste libre pour le shield DMX.</li>
+    </ul>
+  </div>
+</article>
+
+<article class="block" id="b-eeprom" data-keywords="eeprom settings quizconfig equipes projecteurs couleurs dmx patch">
+  <div class="block-head">
+    <h2>3. Structure de configuration (EEPROM)</h2>
+    <div class="block-meta">Lignes 33 à 43</div>
+  </div>
+  <div class="block-body">
+<pre class="code">struct QuizConfig {
+    byte magic;
+    int nbEquipes;
+    int nbCanaux;
+    int offDim, offR, offG, offB;
+    int adressesDMX[30];
+    byte couleurs[30][30][3];
+} settings;</pre>
+    <p>La variable globale <code>settings</code> contient toute la configuration du plateau :</p>
+    <ul>
+      <li><strong>nbEquipes</strong> — combien d’équipes participent (1 à 30).</li>
+      <li><strong>nbCanaux / offDim, offR, offG, offB</strong> — comment est câblé chaque projecteur DMX (quel canal = rouge, vert, bleu, intensité).</li>
+      <li><strong>adressesDMX[30]</strong> — adresse de départ DMX de chaque projecteur (0 = désactivé).</li>
+      <li><strong>couleurs[équipe][projecteur][RGB]</strong> — quelle couleur afficher quand une équipe buzze.</li>
+    </ul>
+    <p>Au démarrage, cette structure est lue depuis l’EEPROM ; le logiciel de config ou <code>SAVE_CONFIG</code> permet de la modifier puis de la sauvegarder.</p>
+  </div>
+</article>
+
+<article class="block" id="b-etat" data-keywords="jeu verrouille deja joue etat variable">
+  <div class="block-head">
+    <h2>4. Variables d’état du jeu</h2>
+    <div class="block-meta">Lignes 45 à 53</div>
+  </div>
+  <div class="block-body">
+<pre class="code">bool jeuVerrouille = false;
+bool dejaJoue[31] = {false};
+bool radioOK = false;
+unsigned long dernierBattement = 0;
+int dernierSignal = -1;
+unsigned long dernierSignalTemps = 0;</pre>
+    <ul>
+      <li><strong>jeuVerrouille</strong> — <code>true</code> dès qu’une équipe a gagné le buzz : les autres ne peuvent plus répondre sur cette question.</li>
+      <li><strong>dejaJoue[i]</strong> — mémorise si l’équipe <em>i</em> a déjà buzzé (utile sur une manche).</li>
+      <li><strong>radioOK</strong> — la radio a-t-elle démarré correctement ?</li>
+      <li><strong>dernierBattement</strong> — pour faire clignoter la LED toutes les 2 s (signe de vie).</li>
+      <li><strong>dernierSignal / dernierSignalTemps</strong> — filtre anti-rebond sur d’anciens formats de paquets.</li>
+    </ul>
+  </div>
+</article>
+
+<article class="block" id="b-radio" data-keywords="radiomsg kind seq buzz commande 88 99 anti doublon">
+  <div class="block-head">
+    <h2>5. Protocole radio &amp; anti-doublon</h2>
+    <div class="block-meta">Lignes 55 à 76</div>
+  </div>
+  <div class="block-body">
+<pre class="code">struct RadioMsg {
+    uint8_t kind;   // 1 = buzz équipe, 2 = commande animateur
+    uint8_t value;  // numéro équipe 1..30 ou code 88 / 99
+    uint16_t seq;   // numéro de séquence
+};
+
+static void radioSendCmdToBuzzers(uint8_t value) {
+    RadioMsg msg = {2, value, ++seqOutboundCmd};
+    radio.stopListening();
+    radio.openWritingPipe(adresseBuzzers);
+    radio.write(&amp;msg, sizeof(msg));
+    radio.startListening();
+}</pre>
+    <p>Chaque paquet radio contient un <strong>type</strong>, une <strong>valeur</strong> et un numéro de <strong>séquence</strong> (seq) :</p>
+    <table class="cmd">
+      <tr><th>kind</th><th>value</th><th>Signification</th></tr>
+      <tr><td>1</td><td>1 … 30</td><td>Buzz de l’équipe N</td></tr>
+      <tr><td>2</td><td>99</td><td>Bonne réponse (animateur) → reset complet</td></tr>
+      <tr><td>2</td><td>88</td><td>Mauvaise réponse → relance partielle</td></tr>
+    </table>
+    <p>La Mega mémorise la dernière <code>seq</code> par équipe pour ignorer les doublons (même bouton appuyé deux fois, rebond radio). La fonction <code>radioSendCmdToBuzzers</code> permet à la Mega de renvoyer 88 ou 99 aux buzzers quand le PC valide ou refuse.</p>
+  </div>
+</article>
+
+<article class="block" id="b-led" data-keywords="led pulse serial buffer pc serie non bloquant">
+  <div class="block-head">
+    <h2>6. LED &amp; buffer série PC</h2>
+    <div class="block-meta">Lignes 78 à 100</div>
+  </div>
+  <div class="block-body">
+<pre class="code">// LED non bloquante
+void ledPulse(unsigned long ms) { ... }
+void ledUpdate() { ... }
+
+// Buffer ligne série PC
+char serialBuf[SERIAL_BUF_LEN];
+uint8_t serialLen = 0;</pre>
+    <p><strong>LED non bloquante</strong> — au lieu d’utiliser <code>delay()</code> (qui fige tout le programme), la Mega note « éteindre la LED à telle milliseconde » et vérifie dans <code>loop()</code>. Le jeu reste réactif pendant les flashs.</p>
+    <p><strong>Buffer série</strong> — les caractères arrivant du PC sont stockés jusqu’au retour à la ligne (<code>\n</code>), puis la ligne complète est passée à <code>parseCommande()</code>. Pas de classe <code>String</code> Arduino (évite les plantages mémoire).</p>
+  </div>
+</article>
+
+<article class="block" id="b-flash" data-keywords="flash dmx vert rouge clignotement validation refus">
+  <div class="block-head">
+    <h2>7. Clignotement DMX (validation / refus)</h2>
+    <div class="block-meta">Lignes 102 à 148</div>
+  </div>
+  <div class="block-body">
+<pre class="code">void flashDmxStartVert()  { flashDmxMode = 1; ... }
+void flashDmxStartRouge() { flashDmxMode = 2; ... }
+void flashDmxUpdate()     { /* 6 étapes × 150 ms : couleur / noir */ }</pre>
+    <p>Quand l’animateur valide ou refuse (ou le PC envoie <code>RESET_ALL</code> / <code>RELANCE_PARTIEL</code>), tous les projecteurs configurés clignotent :</p>
+    <ul>
+      <li><strong>Vert</strong> — bonne réponse (3 cycles rapides).</li>
+      <li><strong>Rouge</strong> — mauvaise réponse.</li>
+    </ul>
+    <p><code>flashDmxUpdate()</code> est appelée à chaque tour de <code>loop()</code> : progression par petits pas de 150 ms, sans bloquer la radio ni le port série.</p>
+  </div>
+</article>
+
+<article class="block" id="b-fenetre" data-keywords="fenetre 50ms simultane buffer buzz">
+  <div class="block-head">
+    <h2>8. Gestion des buzz quasi simultanés</h2>
+    <div class="block-meta">Lignes 150 à 156 (+ traitement lignes 326 à 346)</div>
+  </div>
+  <div class="block-body">
+<pre class="code">#define FENETRE_MS   50
+#define MAX_BUFFER    8
+int  bufferSignaux[MAX_BUFFER];
+bool fenetreActive = false;
+unsigned long debutFenetre = 0;</pre>
+    <p>Si deux équipes appuient presque en même temps, la Mega ouvre une <strong>fenêtre de 50 ms</strong> : tous les buzz reçus dans cet intervalle sont collectés dans un buffer. À la fin des 50 ms, la Mega retient la <strong>première équipe valide</strong> du buffer (non déjà jouée, jeu non verrouillé).</p>
+    <p>Cela évite les litiges « qui a appuyé en premier » tout en restant équitable et déterministe.</p>
+  </div>
+</article>
+
+<article class="block" id="b-defaut" data-keywords="defaut usine reset v1 couleurs 8 equipes">
+  <div class="block-head">
+    <h2>9. Configuration usine (par défaut)</h2>
+    <div class="block-meta">Lignes 158 à 210 — fonction <code>initialiserConfigParDefaut()</code></div>
+  </div>
+  <div class="block-body">
+    <p>Si l’EEPROM est vide ou corrompue, ou sur commande <code>RESET_V1</code>, la Mega recharge :</p>
+    <ul>
+      <li>8 équipes, 8 canaux DMX, patch dimmer/R/G/B aux offsets 0–3 ;</li>
+      <li>projecteurs aux adresses DMX 51 et 59 ;</li>
+      <li>palette de couleurs (rouge, bleu, vert, jaune, rose, cyan, …) ;</li>
+      <li>écriture complète en EEPROM avec le magic <code>0xAB</code>.</li>
+    </ul>
+    <p>C’est la configuration « sortie d’usine » du projet, modifiable ensuite via l’outil de config ou le Quiz Board.</p>
+  </div>
+</article>
+
+<article class="block" id="b-son" data-keywords="son nano dfplayer 200 201 202 rafale payload">
+  <div class="block-head">
+    <h2>10. Envoi des sons au nano DFPlayer</h2>
+    <div class="block-meta">Lignes 212 à 259 — <code>envoyerSon()</code></div>
+  </div>
+  <div class="block-body">
+<pre class="code">struct SonPayload {
+    uint16_t cmd;   // 200, 201 ou 202
+    uint8_t team;   // 1..30 pour buzz, 0 sinon
+    uint8_t seq;
+};
+
+void envoyerSon(uint16_t cmd, uint8_t team) { ... }</pre>
+    <table class="cmd">
+      <tr><th>cmd</th><th>Effet</th></tr>
+      <tr><td>200</td><td>Son buzz — <code>team</code> = numéro d’équipe (fichier dédié)</td></tr>
+      <tr><td>201</td><td>Son victoire (bonne réponse)</td></tr>
+      <tr><td>202</td><td>Son échec (mauvaise réponse)</td></tr>
+    </table>
+    <p>La Mega envoie plusieurs copies du paquet (double rafale) car le nano coupe brièvement la radio quand le DFPlayer lit un MP3. Sans cela, les ordres son seraient parfois perdus.</p>
+  </div>
+</article>
+
+<article class="block" id="b-setup" data-keywords="setup demarrage initialisation">
+  <div class="block-head">
+    <h2>11. setup() — Démarrage (une seule fois)</h2>
+    <div class="block-meta">Lignes 264 à 316</div>
+  </div>
+  <div class="block-body">
+    <p>Au branchement ou reset de la carte, <code>setup()</code> enchaîne :</p>
+    <ol>
+      <li><strong>DMX</strong> — init contrôleur, projecteurs éteints.</li>
+      <li><strong>EEPROM</strong> — lecture de <code>settings</code> ; si invalide → config usine.</li>
+      <li><strong>Série PC</strong> — ouverture Serial3 à 9600 bauds.</li>
+      <li><strong>Radio</strong> — canal 108, 250 kbps, CRC, accusés de réception, écoute sur « 00001 ». Trois clignotements LED = OK ; LED fixe 2 s = échec.</li>
+      <li><strong>Purge</strong> — vide le buffer radio des paquets parasites.</li>
+    </ol>
+    <p>Après <code>setup()</code>, seule <code>loop()</code> tourne en continu.</p>
+  </div>
+</article>
+
+<article class="block" id="b-loop" data-keywords="loop boucle buzz reception radio serie">
+  <div class="block-head">
+    <h2>12. loop() — Cœur du programme</h2>
+    <div class="block-meta">Lignes 321 à 479</div>
+  </div>
+  <div class="block-body">
+    <p>À chaque passage, <code>loop()</code> exécute dans l’ordre :</p>
+
+    <h3>A. Tâches de fond</h3>
+    <ul>
+      <li><code>ledUpdate()</code> et <code>flashDmxUpdate()</code> — fin des flashs LED/DMX programmés.</li>
+      <li>Battement LED toutes les 2 s si radio OK.</li>
+    </ul>
+
+    <h3>B. Fin de fenêtre 50 ms (buzz simultanés)</h3>
+    <p>Si la fenêtre est expirée : choix de l’équipe gagnante → verrouillage → couleur DMX → <code>BUZZ:n</code> vers PC → <code>envoyerSon(200, n)</code>.</p>
+
+    <h3>C. Port série PC</h3>
+    <p>Lit les caractères sans bloquer ; à chaque ligne complète → <code>parseCommande()</code>.</p>
+
+    <h3>D. Réception radio</h3>
+    <ul>
+      <li><strong>Buzz équipe (kind=1)</strong> — ajout au buffer de la fenêtre 50 ms.</li>
+      <li><strong>Commande 99</strong> — bonne réponse : PC notifié, son 201, flash vert, déverrouillage, reset <code>dejaJoue</code>.</li>
+      <li><strong>Commande 88</strong> — mauvaise réponse : PC notifié, son 202, flash rouge, déverrouillage (équipe peut rebuzzer).</li>
+    </ul>
+    <p>Chaque paquet passe d’abord par le filtre anti-doublon (<code>seq</code>).</p>
+  </div>
+</article>
+
+<article class="block" id="b-parse" data-keywords="parsecommande who reset relance set_patch config pc">
+  <div class="block-head">
+    <h2>13. Commandes reçues du PC</h2>
+    <div class="block-meta">Lignes 481 à 616 — <code>parseCommande()</code></div>
+  </div>
+  <div class="block-body">
+    <p>Le Quiz Board ou l’outil de config envoie des lignes texte terminées par <code>\n</code>. Principales commandes :</p>
+    <table class="cmd">
+      <tr><th>Commande PC → Mega</th><th>Action Mega</th><th>Réponse Mega → PC</th></tr>
+      <tr><td><code>WHO</code></td><td>Identification</td><td><code>READY_MEGA</code></td></tr>
+      <tr><td><code>RESET_ALL</code></td><td>Bonne réponse : radio 99, son 201, flash vert, reset jeu</td><td><code>CMD_SENT:RESET_ALL</code></td></tr>
+      <tr><td><code>RELANCE_PARTIEL</code></td><td>Faux : radio 88, son 202, flash rouge</td><td><code>CMD_SENT:RELANCE_PARTIEL</code></td></tr>
+      <tr><td><code>SET_PATCH:…</code></td><td>Canaux DMX et offsets R/V/B</td><td><code>CONF:PATCH_OK</code></td></tr>
+      <tr><td><code>SET_NB_EQ:n</code></td><td>Nombre d’équipes</td><td><code>CONF:NB_EQUIPES_OK</code></td></tr>
+      <tr><td><code>SET_ADR:i:adr</code></td><td>Adresse DMX projecteur i</td><td><code>CONF:ADR_OK</code></td></tr>
+      <tr><td><code>SET_COL:eq:grp:r:g:b</code></td><td>Couleur équipe / projecteur</td><td><code>CONF:COL_OK</code></td></tr>
+      <tr><td><code>SAVE_CONFIG</code></td><td>Sauvegarde EEPROM</td><td><code>CONF:SAVED_TO_EEPROM</code></td></tr>
+      <tr><td><code>RESET_V1</code></td><td>Config usine</td><td><code>CONF:V1_RESTORED</code></td></tr>
+    </table>
+    <p>Quand une équipe buzze, la Mega envoie spontanément au PC : <code>BUZZ:3</code> (exemple équipe 3).</p>
+  </div>
+</article>
+
+<article class="block" id="b-dmx" data-keywords="setprojecteur eteindre allumer couleur equipe dmx512">
+  <div class="block-head">
+    <h2>14. Fonctions lumières DMX</h2>
+    <div class="block-meta">Lignes 618 à 664</div>
+  </div>
+  <div class="block-body">
+<pre class="code">void setProjecteur(int addr, int r, int g, int b);
+void eteindreLumieres();
+void allumerCouleurEquipe(int equipe);</pre>
+    <ul>
+      <li><strong>setProjecteur</strong> — écrit dimmer à 255 puis R, G, B aux offsets définis dans <code>settings</code>, à partir de l’adresse DMX <code>addr</code>.</li>
+      <li><strong>eteindreLumieres</strong> — met à 0 tous les canaux de tous les projecteurs configurés (adresse 1–512).</li>
+      <li><strong>allumerCouleurEquipe</strong> — éteint tout, puis pour chaque projecteur applique la couleur mémorisée pour l’équipe qui vient de buzzer.</li>
+    </ul>
+    <p>C’est l’effet visuel en salle : une équipe buzze → ses projecteurs s’allument dans sa couleur.</p>
+  </div>
+</article>
+
+<article class="block" id="b-resume" data-keywords="resume flux schema">
+  <div class="block-head">
+    <h2>15. Résumé — cycle d’une question</h2>
+    <div class="block-meta">Vue d’ensemble client</div>
+  </div>
+  <div class="block-body">
+    <ol>
+      <li><strong>Attente</strong> — <code>jeuVerrouille = false</code>, projecteurs éteints (ou état précédent).</li>
+      <li><strong>Buzz</strong> — radio reçoit kind=1 → fenêtre 50 ms → une équipe retenue.</li>
+      <li><strong>Action buzz</strong> — DMX couleur + <code>BUZZ:n</code> PC + son 200.</li>
+      <li><strong>Verrou</strong> — <code>jeuVerrouille = true</code> : plus d’autre buzz accepté.</li>
+      <li><strong>Validation animateur / PC</strong> — 99 ou <code>RESET_ALL</code> → flash vert, reset manche.</li>
+      <li><strong>Refus</strong> — 88 ou <code>RELANCE_PARTIEL</code> → flash rouge, déverrouillage, autres équipes peuvent rebuzzer.</li>
+    </ol>
+    <p>Le firmware est entièrement <strong>non bloquant</strong> : radio, DMX, PC et flashs coexistent grâce à <code>millis()</code> et à des mises à jour par petits morceaux dans <code>loop()</code>.</p>
+  </div>
+</article>
+
+</main>
+</div>
+
+<footer>
+  megaf.ino — Documentation par blocs · Projet DMX Quiz · Imprimer (Ctrl+P) pour PDF
+</footer>
+
+<script>
+document.getElementById('btn-print').addEventListener('click', () => window.print());
+document.getElementById('search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.block[data-keywords], .block:not([data-keywords])').forEach(el => {
+    if (!q) { el.classList.remove('hidden'); return; }
+    const text = (el.textContent + ' ' + (el.dataset.keywords || '')).toLowerCase();
+    el.classList.toggle('hidden', !text.includes(q));
+  });
+  document.getElementById('intro').classList.toggle('hidden', q && !document.getElementById('intro').textContent.toLowerCase().includes(q));
+});
+</script>
+</body>
+</html>

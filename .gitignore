@@ -27,3 +27,6 @@ QuizBoardV6
 Thumbs.db
 .idea/
 .vscode/
+
+# Local Arduino CLI toolchain cache (large, machine-specific)
+.arduino-cli/

@@ -7,8 +7,8 @@ Ce dossier contient :
 ## Contenu
 
 - **Arduino**
-  - `mega30Equipe.ino` : sketch pour Arduino MEGA (DMX + radio NRF24L01)
-  - `nano_equipe_corrige.ino` : sketch pour Arduino NANO (équipe)
+  - `megaf.ino` : sketch pour Arduino MEGA (DMX + radio NRF24L01)
+  - `buzzer_nano_equipe.ino` : sketch pour Arduino NANO (équipe)
   - `nano_son_final.ino` : sketch pour Arduino NANO (son)
   - `nano_animateur_final.ino` : sketch pour Arduino NANO (animateur)
 

@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Nanos Arduino — Explication par blocs</title>
+<style>
+:root {
+  --bg: #f4f6fa;
+  --card: #fff;
+  --code-bg: #1a2332;
+  --code-fg: #e6edf7;
+  --accent: #7c3aed;
+  --accent-bg: #ede9fe;
+  --mega: #1d4ed8;
+  --equipe: #059669;
+  --animateur: #d97706;
+  --son: #7c3aed;
+  --text: #1e293b;
+  --muted: #64748b;
+  --border: #e2e8f0;
+}
+* { box-sizing: border-box; }
+body {
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  line-height: 1.65;
+}
+header {
+  background: linear-gradient(120deg, #312e81, #7c3aed);
+  color: #fff;
+  padding: 2rem 2rem 1.5rem;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 4px 24px rgba(0,0,0,.2);
+}
+header h1 { margin: 0 0 .35rem; font-size: 1.55rem; }
+header p { margin: 0; opacity: .92; max-width: 55rem; }
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .6rem;
+  margin-top: 1rem;
+}
+.toolbar input {
+  flex: 1;
+  min-width: 180px;
+  padding: .5rem .8rem;
+  border: none;
+  border-radius: 8px;
+}
+.toolbar button {
+  padding: .5rem 1rem;
+  border: none;
+  border-radius: 8px;
+  background: #fff;
+  color: #312e81;
+  font-weight: 600;
+  cursor: pointer;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  max-width: 1200px;
+  margin: 0 auto;
+  gap: 1.5rem;
+  padding: 1.5rem;
+}
+nav {
+  position: sticky;
+  top: 7.5rem;
+  align-self: start;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  font-size: .86rem;
+}
+nav h2 { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: .8rem 0 .4rem; }
+nav h2:first-child { margin-top: 0; }
+nav a {
+  display: block;
+  color: var(--accent);
+  text-decoration: none;
+  padding: .2rem 0;
+}
+nav a:hover { text-decoration: underline; }
+main { min-width: 0; }
+.intro, .block {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+.intro { padding: 1.25rem 1.5rem; }
+.intro h2 { margin-top: 0; color: var(--accent); }
+.block.hidden, .intro.hidden { display: none; }
+.block-head {
+  padding: .85rem 1.15rem;
+  border-bottom: 1px solid var(--border);
+}
+.block-head h2 { margin: 0; font-size: 1.1rem; }
+.block-meta { font-size: .82rem; color: var(--muted); margin-top: .25rem; }
+.block-body { padding: 1rem 1.15rem 1.15rem; }
+.block-body h3 { font-size: .95rem; margin: 1rem 0 .4rem; color: var(--accent); }
+.block-body h3:first-child { margin-top: 0; }
+.block-body p { margin: .5rem 0; }
+.block-body ul, .block-body ol { margin: .4rem 0 .6rem; padding-left: 1.25rem; }
+.code-wrap { margin: .85rem 0; }
+.code-label {
+  font-family: Consolas, Monaco, monospace;
+  font-size: .72rem;
+  color: var(--muted);
+  background: #eef2ff;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  padding: .35rem .75rem;
+}
+.code-label strong { color: #4338ca; }
+pre.code {
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 1rem;
+  border-radius: 0 0 8px 8px;
+  overflow-x: auto;
+  font-family: Consolas, Monaco, monospace;
+  font-size: .78rem;
+  line-height: 1.45;
+  margin: 0;
+  white-space: pre;
+}
+.code-wrap:first-child pre.code,
+pre.code.standalone {
+  border-radius: 8px;
+}
+.code-wrap:first-child .code-label + pre.code { border-radius: 0 0 8px 8px; }
+pre.code .ln {
+  color: #64748b;
+  user-select: none;
+  display: inline-block;
+  min-width: 2.8em;
+  margin-right: .6em;
+}
+.flow {
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  font-family: Consolas, monospace;
+  font-size: .8rem;
+  overflow-x: auto;
+  white-space: pre;
+  line-height: 1.45;
+}
+.role-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: .75rem;
+  margin: 1rem 0;
+}
+.role-card {
+  border-radius: 10px;
+  padding: .85rem 1rem;
+  border: 1px solid var(--border);
+}
+.role-card strong { display: block; margin-bottom: .35rem; }
+.role-equipe { border-left: 4px solid var(--equipe); background: #ecfdf5; }
+.role-animateur { border-left: 4px solid var(--animateur); background: #fffbeb; }
+.role-son { border-left: 4px solid var(--son); background: #f5f3ff; }
+.tag {
+  display: inline-block;
+  font-size: .72rem;
+  font-weight: 600;
+  padding: .15rem .45rem;
+  border-radius: 4px;
+  margin-right: .35rem;
+}
+.tag-equipe { background: #dcfce7; color: var(--equipe); }
+.tag-animateur { background: #fef3c7; color: var(--animateur); }
+.tag-son { background: #ede9fe; color: var(--son); }
+.tag-mega { background: #dbeafe; color: var(--mega); }
+table.cmd {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+  margin: .75rem 0;
+}
+table.cmd th, table.cmd td {
+  border: 1px solid var(--border);
+  padding: .45rem .6rem;
+  text-align: left;
+}
+table.cmd th { background: #f1f5f9; }
+.head-equipe { background: #ecfdf5; }
+.head-equipe h2 { color: var(--equipe); }
+.head-animateur { background: #fffbeb; }
+.head-animateur h2 { color: var(--animateur); }
+.head-son { background: #f5f3ff; }
+.head-son h2 { color: var(--son); }
+footer {
+  text-align: center;
+  color: var(--muted);
+  padding: 2rem;
+  font-size: .85rem;
+  grid-column: 1 / -1;
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  nav { position: static; }
+}
+@media print {
+  header { position: static; }
+  .toolbar, nav { display: none !important; }
+  .layout { display: block; padding: 0; }
+  pre.code { background: #f1f5f9; color: #0f172a; border: 1px solid #cbd5e1; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Nanos Arduino </h1>
+  <p>Trois types de cartes Nano dans le projet quiz : <strong>buzzer équipe</strong>, <strong>animateur</strong>, <strong>son DFPlayer</strong>. Explication par blocs de code, en lien avec la Mega.</p>
+  <div class="toolbar">
+    <input type="search" id="search" placeholder="Rechercher (buzzer, DFPlayer, 88, 99, radio…)">
+    <button type="button" id="btn-print">Exporter PDF (Imprimer)</button>
+  </div>
+</header>
+
+<div class="layout">
+<nav>
+  <h2>Vue d’ensemble</h2>
+  <a href="#intro">Rôle des Nanos</a>
+  <a href="#radio">Radio commune</a>
+  <a href="#fichiers">Fichiers source</a>
+
+  <h2>Nano équipe</h2>
+  <a href="#eq-includes">Bibliothèques</a>
+  <a href="#eq-role">Rôle &amp; câblage</a>
+  <a href="#eq-config">Configuration</a>
+  <a href="#eq-radio">Protocole radio</a>
+  <a href="#eq-setup">setup()</a>
+  <a href="#eq-loop">loop()</a>
+
+  <h2>Nano animateur</h2>
+  <a href="#anim-role">Rôle &amp; boutons</a>
+  <a href="#anim-setup">setup()</a>
+  <a href="#anim-radio">Envoi radio</a>
+  <a href="#anim-loop">loop()</a>
+
+  <h2>Nano son</h2>
+  <a href="#son-includes">Bibliothèques &amp; constantes</a>
+  <a href="#son-role">Rôle &amp; DFPlayer</a>
+  <a href="#son-payload">Paquets 200/201/202</a>
+  <a href="#son-dedupe">File &amp; anti-doublon</a>
+  <a href="#son-mp3">Fichiers MP3 SD</a>
+  <a href="#son-df">DF + radio</a>
+  <a href="#son-setup">setup()</a>
+  <a href="#son-loop">loop()</a>
+
+  <h2>Ensemble</h2>
+  <a href="#schema">Schéma global</a>
+</nav>
+
+<main>
+
+<section class="intro" id="intro">
+  <h2>Rôle des Nanos dans le système</h2>
+  <p>La <strong>Arduino Mega</strong> est le centre (DMX, logique jeu, relais PC). Les <strong>Nanos</strong> sont des cartes légères déportées dans la salle :</p>
+  <div class="role-cards">
+    <div class="role-card role-equipe">
+      <strong><span class="tag tag-equipe">Équipe</span> buzzer_nano_equipe.ino</strong>
+      Un buzzer par équipe. Envoie « j’ai buzzé » à la Mega.
+    </div>
+    <div class="role-card role-animateur">
+      <strong><span class="tag tag-animateur">Animateur</span> nano_animateur_final.ino</strong>
+      Deux boutons : valider (bonne réponse) ou refuser (faux).
+    </div>
+    <div class="role-card role-son">
+      <strong><span class="tag tag-son">Son</span> nano_son_final.ino</strong>
+      Reçoit ordres de la Mega, joue les MP3 sur carte microSD (DFPlayer).
+    </div>
+  </div>
+  <p>Chaque Nano a sa mission ; ils ne font pas tous la même chose. Seuls les <strong>buzzers</strong> et l’<strong>animateur</strong> émettent vers la Mega. Le <strong>nano son</strong> ne fait qu’<em>écouter</em> la Mega sur une autre adresse radio.</p>
+</section>
+
+<article class="block" id="radio" data-keywords="radio canal 108 adresse pipe 00001 00002 nrf24">
+  <div class="block-head">
+    <h2>Paramètres radio communs</h2>
+    <div class="block-meta">Toutes les cartes du projet</div>
+  </div>
+  <div class="block-body">
+    <table class="cmd">
+      <tr><th>Paramètre</th><th>Valeur</th><th>Qui l’utilise</th></tr>
+      <tr><td>Canal RF</td><td><strong>108</strong></td><td>Mega, équipes, animateur, son</td></tr>
+      <tr><td>Adresse « 00001 »</td><td>Pipe buzzers + animateur → Mega</td><td>Équipe, animateur (émetteurs) ; Mega (récepteur)</td></tr>
+      <tr><td>Adresse « 00002 »</td><td>Pipe ordres son</td><td>Mega (émetteur) ; nano son (récepteur)</td></tr>
+      <tr><td>Débit</td><td>250 kbps</td><td>Meilleure portée en salle</td></tr>
+      <tr><td>Broches radio</td><td>CE = 9, CSN = 10</td><td>Tous les Nanos (Mega : CE=9, CSN=53)</td></tr>
+    </table>
+    <p>Les buzzers et l’animateur utilisent le <strong>même format de message</strong> <code>RadioMsg</code> (4 octets). Le nano son utilise un format différent <code>SonPayload</code> (4 octets aussi, mais autre structure).</p>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.9-14, L.46-57</div>
+<pre class="code">RF24 radio(9, 10);                    // CE=9, CSN=10 (tous les Nanos)
+const byte adresse[6] = "00001";       // émission vers la Mega
+#define RADIO_CHANNEL 108
+
+radio.setChannel(RADIO_CHANNEL);
+radio.setDataRate(RF24_250KBPS);
+radio.setAutoAck(true);                // buzzers + animateur
+radio.setRetries(10, 15);</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.44-49, L.315-323</div>
+<pre class="code">RF24 radio(9, 10);
+const byte adresseSon[6] = "00002";    // réception depuis la Mega
+#define RADIO_CHANNEL 108
+
+radio.setChannel(RADIO_CHANNEL);
+radio.setAutoAck(false);               // nano son : pas d'ACK
+radio.openReadingPipe(1, adresseSon);
+radio.startListening();</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="fichiers" data-keywords="fichier ino source">
+  <div class="block-head">
+    <h2>Fichiers source</h2>
+  </div>
+  <div class="block-body">
+    <table class="cmd">
+      <tr><th>Fichier</th><th>Carte</th><th>Rôle</th></tr>
+      <tr><td><code>buzzer_nano_equipe.ino</code></td><td>1 par équipe</td><td>Bouton buzz + vibreur</td></tr>
+      <tr><td><code>nano_animateur_final.ino</code></td><td>1 en régie</td><td>Valider / Faux</td></tr>
+      <tr><td><code>nano_son_final.ino</code></td><td>1 en salle</td><td>HP + DFPlayer microSD</td></tr>
+      <tr><td><code>megaf.ino</code></td><td>1 Mega</td><td>Hub central (voir doc Mega)</td></tr>
+    </table>
+  </div>
+</article>
+
+<!-- ==================== NANO ÉQUIPE ==================== -->
+
+<article class="block" id="eq-includes" data-keywords="include spi rf24 watchdog">
+  <div class="block-head head-equipe">
+    <h2>Nano équipe — Bibliothèques</h2>
+    <div class="block-meta">buzzer_nano_equipe.ino · L.1 à 4</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.1-4</div>
+<pre class="code">#include &lt;SPI.h&gt;          // bus SPI pour la radio nRF24
+#include &lt;nRF24L01.h&gt;     // définitions bas niveau du chip
+#include &lt;RF24.h&gt;         // pilote radio 2,4 GHz
+#include &lt;avr/wdt.h&gt;      // watchdog : redémarrage auto si blocage</pre>
+    </div>
+    <p>Pas de DMX, pas de DFPlayer : cette carte ne fait qu’<strong>émettre un buzz</strong> quand on appuie sur le bouton.</p>
+  </div>
+</article>
+
+<article class="block" id="eq-role" data-keywords="equipe buzzer bouton vibreur monEquipe">
+  <div class="block-head head-equipe">
+    <h2>Nano équipe — Rôle et câblage</h2>
+    <div class="block-meta">Fichier : buzzer_nano_equipe.ino</div>
+  </div>
+  <div class="block-body">
+    <p>Chaque équipe a <strong>une Nano</strong> avec un bouton. Quand un joueur appuie, la carte envoie son numéro d’équipe à la Mega par radio.</p>
+    <table class="cmd">
+      <tr><th>Broche</th><th>Usage</th></tr>
+      <tr><td>D2</td><td>Bouton buzz (INPUT_PULLUP — appui = LOW)</td></tr>
+      <tr><td>D3</td><td>Moteur vibreur (feedback tactile)</td></tr>
+      <tr><td>D9 / D10</td><td>Radio nRF24 (CE / CSN)</td></tr>
+      <tr><td>LED intégrée</td><td>Clignote à l’appui</td></tr>
+    </table>
+    <p><strong>Important :</strong> avant de flasher, modifier <code>monEquipe</code> (ligne 17) : 1 pour équipe 1, 2 pour équipe 2, … jusqu’à 30. Une carte = un numéro unique.</p>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.9-17</div>
+<pre class="code">RF24 radio(9, 10);              // CE sur 9, CSN sur 10
+const byte adresse[6] = "00001";
+const int boutonPin  = 2;         // bouton buzz
+const int moteurPin  = 3;         // vibreur
+
+#define RADIO_CHANNEL  108
+
+int monEquipe = 3;                // ← CHANGER : 1..30 selon la carte</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="eq-config" data-keywords="monEquipe debounce cooldown antirebond">
+  <div class="block-head head-equipe">
+    <h2>Nano équipe — Configuration logicielle</h2>
+    <div class="block-meta">Lignes 6 à 32</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.19-32</div>
+<pre class="code">struct RadioMsg {
+    uint8_t kind;    // 1 = BUZZ_EQUIPE
+    uint8_t value;   // team 1..30
+    uint16_t seq;    // increment
+};
+uint16_t seqCounter = 0;
+
+const unsigned long DEBOUNCE_MS = 25;    // anti-rebond bouton
+const unsigned long COOLDOWN_MS = 250;   // délai min entre envois
+unsigned long lastSendMs = 0;
+bool lastBtn = true;
+unsigned long lastChangeMs = 0;</pre>
+    </div>
+    <ul>
+      <li><strong>monEquipe</strong> — identité de la carte ; doit correspondre au numéro affiché au quiz et à <code>settings.nbEquipes</code> sur la Mega.</li>
+      <li><strong>DEBOUNCE_MS (25 ms)</strong> — ignore les tremblements mécaniques du bouton.</li>
+      <li><strong>COOLDOWN_MS (250 ms)</strong> — évite d’envoyer 10 buzz si on reste appuyé ; garde une bonne réactivité.</li>
+      <li><strong>Watchdog (WDT 2 s)</strong> — redémarre la carte si le programme se bloque.</li>
+    </ul>
+  </div>
+</article>
+
+<article class="block" id="eq-radio" data-keywords="radiomsg kind seq buzz equipe">
+  <div class="block-head head-equipe">
+    <h2>Nano équipe — Message radio envoyé</h2>
+    <div class="block-meta">Lignes 19 à 25, 92 à 102</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.19-25</div>
+<pre class="code">struct RadioMsg {
+    uint8_t kind;    // 1 = buzz équipe
+    uint8_t value;   // numéro équipe 1..30
+    uint16_t seq;    // compteur anti-doublon
+};</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.92-102</div>
+<pre class="code">RadioMsg msg;
+msg.kind = 1;
+msg.value = (uint8_t)monEquipe;
+msg.seq = ++seqCounter;
+
+bool ok = false;
+for (int i = 0; i &lt; 5 &amp;&amp; !ok; i++) {
+    ok = radio.write(&amp;msg, sizeof(msg));
+    if (!ok) delay(8);
+}</pre>
+    </div>
+    <p>À chaque appui validé, la Nano émet un paquet vers l’adresse <strong>00001</strong>. La Mega reçoit, ouvre la fenêtre 50 ms si plusieurs buzz, puis traite le gagnant.</p>
+    <p>Le champ <code>seq</code> s’incrémente à chaque envoi : la Mega ignore un paquet déjà vu (même seq), ce qui évite les doubles buzz accidentels.</p>
+    <p>Envoi avec <strong>AutoAck</strong> et jusqu’à 5 tentatives : la radio confirme la réception par la Mega.</p>
+  </div>
+</article>
+
+<article class="block" id="eq-setup" data-keywords="setup equipe buzzer radio">
+  <div class="block-head head-equipe">
+    <h2>Nano équipe — setup()</h2>
+    <div class="block-meta">buzzer_nano_equipe.ino · L.37 à 65</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.37-65</div>
+<pre class="code">void setup() {
+    Serial.begin(9600);
+    pinMode(boutonPin, INPUT_PULLUP);
+    pinMode(moteurPin, OUTPUT);
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(moteurPin, LOW);
+    wdt_enable(WDTO_2S);              // watchdog 2 secondes
+
+    if (radio.begin()) {
+        radio.setChannel(RADIO_CHANNEL);
+        radio.setAddressWidth(5);
+        radio.openWritingPipe(adresse);
+        radio.setPALevel(RF24_PA_MAX);
+        radio.setDataRate(RF24_250KBPS);
+        radio.setCRCLength(RF24_CRC_16);
+        radio.setPayloadSize(sizeof(RadioMsg));
+        radio.setAutoAck(true);
+        radio.setRetries(10, 15);
+        radio.stopListening();        // mode émetteur uniquement
+
+        Serial.print("Buzzer Equipe ");
+        Serial.print(monEquipe);
+        Serial.println(" pret !");
+    } else {
+        Serial.println("ERREUR : Module Radio non detecte !");
+    }
+}</pre>
+    </div>
+    <p>La radio est configurée en <strong>émission seule</strong> (<code>stopListening</code>) : la carte n’écoute jamais, elle envoie seulement des buzz.</p>
+  </div>
+</article>
+
+<article class="block" id="eq-loop" data-keywords="loop equipe debounce cooldown vibreur">
+  <div class="block-head head-equipe">
+    <h2>Nano équipe — loop()</h2>
+    <div class="block-meta">buzzer_nano_equipe.ino · L.70 à 109</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>buzzer_nano_equipe.ino</strong> · L.70-109</div>
+<pre class="code">void loop() {
+    wdt_reset();
+    bool btn = (digitalRead(boutonPin) == LOW);
+    unsigned long now = millis();
+
+    if (btn != lastBtn) {             // changement d'état bouton
+        lastBtn = btn;
+        lastChangeMs = now;
+    }
+
+    if (btn &amp;&amp; (now - lastChangeMs) &gt;= DEBOUNCE_MS) {
+        if (now - lastSendMs &gt;= COOLDOWN_MS) {
+            lastSendMs = now;
+
+            digitalWrite(moteurPin, HIGH);   // vibreur ON
+            digitalWrite(LED_BUILTIN, HIGH);
+
+            RadioMsg msg;
+            msg.kind = 1;
+            msg.value = (uint8_t)monEquipe;
+            msg.seq = ++seqCounter;
+
+            bool ok = false;
+            for (int i = 0; i &lt; 5 &amp;&amp; !ok; i++) {
+                ok = radio.write(&amp;msg, sizeof(msg));
+                if (!ok) delay(8);
+            }
+
+            delay(120);
+            digitalWrite(moteurPin, LOW);      // vibreur OFF
+            digitalWrite(LED_BUILTIN, LOW);
+        }
+    }
+}</pre>
+    </div>
+    <p>Pas de réception radio : émetteur pur. Le feedback vibreur + LED confirme l’appui au joueur même si la radio met quelques ms à répondre.</p>
+  </div>
+</article>
+
+<!-- ==================== NANO ANIMATEUR ==================== -->
+
+<article class="block" id="anim-role" data-keywords="animateur bouton valider faux reset relance">
+  <div class="block-head head-animateur">
+    <h2>Nano animateur — Rôle et boutons</h2>
+    <div class="block-meta">Fichier : nano_animateur_final.ino</div>
+  </div>
+  <div class="block-body">
+    <p>La télécommande de l’animateur envoie deux types de commandes à la Mega (même adresse <strong>00001</strong> que les buzzers, mais <code>kind = 2</code>).</p>
+    <table class="cmd">
+      <tr><th>Broche</th><th>Bouton</th><th>Code envoyé</th><th>Effet sur le jeu</th></tr>
+      <tr><td>D2</td><td>VALIDER (bonne réponse)</td><td><strong>99</strong></td><td>Reset manche, flash vert DMX, son victoire, débloque tout le monde</td></tr>
+      <tr><td>D3</td><td>FAUX (mauvaise réponse)</td><td><strong>88</strong></td><td>Relance partielle, flash rouge, son échec, autres équipes peuvent rebuzzer</td></tr>
+    </table>
+    <p>Les boutons sont en <code>INPUT_PULLUP</code> : appui = contact vers masse (LOW).</p>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_animateur_final.ino</strong> · L.6-11, L.23-24</div>
+<pre class="code">RF24 radio(9, 10);
+const byte adresse[6] = "00001";
+const int boutonResetAll = 2;     // VALIDER → 99
+const int boutonRelance  = 3;     // FAUX → 88
+
+#define RADIO_CHANNEL  108
+
+pinMode(boutonResetAll, INPUT_PULLUP);
+pinMode(boutonRelance,  INPUT_PULLUP);</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="anim-setup" data-keywords="setup animateur radio watchdog">
+  <div class="block-head head-animateur">
+    <h2>Nano animateur — setup()</h2>
+    <div class="block-meta">nano_animateur_final.ino · L.21 à 50</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_animateur_final.ino</strong> · L.21-50</div>
+<pre class="code">void setup() {
+    Serial.begin(9600);
+    pinMode(boutonResetAll, INPUT_PULLUP);
+    pinMode(boutonRelance,  INPUT_PULLUP);
+    pinMode(LED_BUILTIN,    OUTPUT);
+    wdt_enable(WDTO_2S);
+
+    if (radio.begin()) {
+        radio.setChannel(RADIO_CHANNEL);
+        radio.setAddressWidth(5);
+        radio.setPALevel(RF24_PA_MAX);
+        radio.setDataRate(RF24_250KBPS);
+        radio.setCRCLength(RF24_CRC_16);
+        radio.setPayloadSize(sizeof(RadioMsg));
+        radio.setAutoAck(true);
+        radio.setRetries(10, 15);
+        radio.openWritingPipe(adresse);
+        radio.stopListening();
+
+        for (int i = 0; i &lt; 3; i++) {
+            digitalWrite(LED_BUILTIN, HIGH); delay(100);
+            digitalWrite(LED_BUILTIN, LOW);  delay(100);
+        }
+        Serial.println("NANO ANIMATEUR V2 PRET !");
+    } else {
+        digitalWrite(LED_BUILTIN, HIGH);
+        delay(2000);
+        digitalWrite(LED_BUILTIN, LOW);
+    }
+}</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="anim-radio" data-keywords="envoyersignal kind 2 commande seq">
+  <div class="block-head head-animateur">
+    <h2>Nano animateur — Envoi radio</h2>
+    <div class="block-meta">Lignes 13 à 18, 52 à 64</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_animateur_final.ino</strong> · L.13-19</div>
+<pre class="code">struct RadioMsg {
+    uint8_t kind;   // 2 = CMD
+    uint8_t value;  // 88 / 99
+    uint16_t seq;
+};
+uint16_t seqCounter = 0;</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_animateur_final.ino</strong> · L.52-64</div>
+<pre class="code">void envoyerSignal(uint8_t signal) {
+    RadioMsg msg;
+    msg.kind = 2;
+    msg.value = signal;          // 88 ou 99
+    msg.seq = ++seqCounter;
+
+    bool ok = false;
+    for (int i = 0; i &lt; 5 &amp;&amp; !ok; i++) {
+        ok = radio.write(&amp;msg, sizeof(msg));
+        if (!ok) delay(10);
+    }
+}</pre>
+    </div>
+    <p>Même structure que les buzzers, seul <code>kind</code> change : la Mega distingue buzz équipe (1) et commande animateur (2).</p>
+    <p>La Mega transmet ensuite au PC <code>CMD_SENT:RESET_ALL</code> ou <code>CMD_SENT:RELANCE_PARTIEL</code> et déclenche DMX + son.</p>
+  </div>
+</article>
+
+<article class="block" id="anim-loop" data-keywords="loop animateur watchdog debounce 88 99">
+  <div class="block-head head-animateur">
+    <h2>Nano animateur — loop()</h2>
+    <div class="block-meta">nano_animateur_final.ino · L.66 à 93</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_animateur_final.ino</strong> · L.66-79 — bouton VALIDER (99)</div>
+<pre class="code">void loop() {
+    wdt_reset();
+
+    if (digitalRead(boutonResetAll) == LOW) {
+        delay(20);                              // anti-rebond
+        if (digitalRead(boutonResetAll) != LOW) return;
+        digitalWrite(LED_BUILTIN, HIGH);
+        envoyerSignal(99);                      // RESET_ALL
+        Serial.println("ENVOYE : 99 (RESET_ALL)");
+        delay(100);
+        digitalWrite(LED_BUILTIN, LOW);
+        delay(300);
+        while (digitalRead(boutonResetAll) == LOW);  // attend relâchement
+    }</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_animateur_final.ino</strong> · L.81-92 — bouton FAUX (88)</div>
+<pre class="code">    if (digitalRead(boutonRelance) == LOW) {
+        delay(20);
+        if (digitalRead(boutonRelance) != LOW) return;
+        digitalWrite(LED_BUILTIN, HIGH);
+        envoyerSignal(88);                      // RELANCE_PARTIEL
+        Serial.println("ENVOYE : 88 (RELANCE_PARTIEL)");
+        delay(100);
+        digitalWrite(LED_BUILTIN, LOW);
+        delay(300);
+        while (digitalRead(boutonRelance) == LOW);
+    }
+}</pre>
+    </div>
+    <p>Les deux branches sont symétriques : anti-rebond, envoi radio, message debug série USB, attente du relâchement pour éviter les répétitions.</p>
+  </div>
+</article>
+
+<!-- ==================== NANO SON ==================== -->
+
+<article class="block" id="son-includes" data-keywords="include dfplayer softwareserial constantes volume">
+  <div class="block-head head-son">
+    <h2>Nano son — Bibliothèques et constantes</h2>
+    <div class="block-meta">nano_son_final.ino · L.1 à 62</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.1-5</div>
+<pre class="code">#include &lt;SPI.h&gt;
+#include &lt;nRF24L01.h&gt;
+#include &lt;RF24.h&gt;
+#include &lt;SoftwareSerial.h&gt;
+#include &lt;DFRobotDFPlayerMini.h&gt;</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.16-22, L.44-62</div>
+<pre class="code">#define DF_ERR_POLL_MS      100    // timeout test fichier absent
+#define DF_PROBE_BOOT_MS     55    // probe SD au démarrage
+#define DF_DRAIN_SHORT_MS    28
+#define DF_DRAIN_CMD_MS      40
+#define DF_VOLUME           25     // volume 0..30 (modifiable)
+
+RF24 radio(9, 10);
+const byte adresseSon[6] = "00002";
+#define RADIO_CHANNEL 108
+
+SoftwareSerial mySoftwareSerial(5, 4);  // RX=D5, TX=D4
+DFRobotDFPlayerMini monLecteurMP3;
+
+bool radioOK = false;
+bool mp3OK   = false;
+static uint32_t teamTrackKnownOk = 0;   // bitmap pistes équipe OK</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="son-role" data-keywords="son dfplayer mp3 microsd softwareserial">
+  <div class="block-head head-son">
+    <h2>Nano son — Rôle et matériel</h2>
+    <div class="block-meta">Fichier : nano_son_final.ino</div>
+  </div>
+  <div class="block-body">
+    <p>Cette Nano <strong>écoute</strong> la Mega sur le pipe <strong>00002</strong> et commande un module <strong>DFPlayer Mini</strong> branché sur une carte microSD.</p>
+    <table class="cmd">
+      <tr><th>Élément</th><th>Détail</th></tr>
+      <tr><td>DFPlayer</td><td>SoftwareSerial : RX=D5, TX=D4 (9600 bauds)</td></tr>
+      <tr><td>Radio</td><td>Réception seule (PRX), pas d’AutoAck</td></tr>
+      <tr><td>Volume</td><td><code>DF_VOLUME = 25</code> (0 à 30, modifiable ligne 22)</td></tr>
+      <tr><td>Alimentation</td><td>Fonctionne seule en salle (pas besoin de PC pour les sons)</td></tr>
+    </table>
+    <p>La Mega envoie les ordres ; ce Nano ne lit pas les boutons buzzer.</p>
+  </div>
+</article>
+
+<article class="block" id="son-payload" data-keywords="sonpayload 200 201 202 cmd team seq">
+  <div class="block-head head-son">
+    <h2>Nano son — Paquets radio reçus</h2>
+    <div class="block-meta">Lignes 24 à 29, 148 à 167</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.24-29</div>
+<pre class="code">struct SonPayload {
+    uint16_t cmd;   // 200, 201 ou 202
+    uint8_t team;   // 1..30 pour buzz, 0 sinon
+    uint8_t seq;    // anti-doublon
+};</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.148-168 — traitement d'un ordre</div>
+<pre class="code">static void playSonCmd(uint16_t cmd, uint8_t team) {
+    if (!mp3OK) return;
+    if (cmd != 200 &amp;&amp; cmd != 201 &amp;&amp; cmd != 202) return;
+
+    ledFlashMs(25);
+    dfStopTrack(monLecteurMP3);           // stop piste en cours
+    drainDfSerial(monLecteurMP3, 12);
+
+    if (cmd == 200) {
+        jouerBuzzEquipeOuGenerique(monLecteurMP3, team);
+    } else if (cmd == 201) {
+        dfPlayTrack(monLecteurMP3, 2);   // 0002.mp3 victoire
+        drainDfSerial(monLecteurMP3, DF_DRAIN_CMD_MS);
+    } else if (cmd == 202) {
+        dfPlayTrack(monLecteurMP3, 3);   // 0003.mp3 échec
+        drainDfSerial(monLecteurMP3, DF_DRAIN_CMD_MS);
+    }
+}</pre>
+    </div>
+    <table class="cmd">
+      <tr><th>cmd</th><th>Signification</th><th>Action DFPlayer</th></tr>
+      <tr><td>200</td><td>Buzz équipe <code>team</code></td><td>Fichier <code>01NN.mp3</code> ou repli <code>0001.mp3</code></td></tr>
+      <tr><td>201</td><td>Bonne réponse</td><td>Piste 2 → <code>0002.mp3</code></td></tr>
+      <tr><td>202</td><td>Mauvaise réponse</td><td>Piste 3 → <code>0003.mp3</code></td></tr>
+    </table>
+    <p>Les paquets invalides ou dupliqués (même cmd + team + seq en ~420–520 ms) sont ignorés.</p>
+  </div>
+</article>
+
+<article class="block" id="son-dedupe" data-keywords="file queue dedupe sonrxq poll valid">
+  <div class="block-head head-son">
+    <h2>Nano son — File d’attente et anti-doublon</h2>
+    <div class="block-meta">nano_son_final.ino · L.31 à 146</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.31-36, L.69-93</div>
+<pre class="code">#define SON_RX_Q_LEN 12
+static SonPayload sonRxQ[SON_RX_Q_LEN];
+static uint8_t sonRxQHead = 0;
+static uint8_t sonRxQTail = 0;
+
+static bool sonPayloadValide(const SonPayload &amp;p) {
+    if (p.cmd != 200 &amp;&amp; p.cmd != 201 &amp;&amp; p.cmd != 202) return false;
+    if (p.cmd == 200 &amp;&amp; p.team &gt; 30) return false;
+    return true;
+}
+
+static bool dedupeSonRadio(const SonPayload &amp;p) {
+    const unsigned long windowMs = (p.cmd == 200) ? 520UL : 420UL;
+    // ignore si même cmd + team + seq dans la fenêtre
+    ...
+}</pre>
+    </div>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.130-146</div>
+<pre class="code">static void pollRadioRx(void) {
+    if (!radioOK) return;
+    SonPayload rx;
+    while (radio.available()) {
+        radio.read(&amp;rx, sizeof(rx));
+        if (!sonPayloadValide(rx)) continue;
+        if (dedupeSonRadio(rx)) continue;
+        sonRxQueuePush(rx);              // file : max 12 paquets
+    }
+}
+
+static void drainSonRxQueue(uint8_t maxPackets) {
+    SonPayload p;
+    for (uint8_t n = 0; n &lt; maxPackets &amp;&amp; sonRxQueuePop(p); n++) {
+        traiterPaquetSonRadio(p);        // → playSonCmd()
+    }
+}</pre>
+    </div>
+    <p>La Mega envoie plusieurs copies du même paquet (rafales) : le dedupe par <code>seq</code> évite de jouer deux fois le même son.</p>
+  </div>
+</article>
+
+<article class="block" id="son-mp3" data-keywords="mp3 0101 0001 carte sd dossier playMp3Folder">
+  <div class="block-head head-son">
+    <h2>Nano son — Fichiers sur la carte microSD</h2>
+    <div class="block-meta">Lignes 65 à 67, 234 à 261</div>
+  </div>
+  <div class="block-body">
+    <p>Dossier à la racine de la SD : <strong>mp3/</strong></p>
+    <table class="cmd">
+      <tr><th>Équipe</th><th>Fichier SD</th><th>Commande lib</th></tr>
+      <tr><td>1</td><td><code>mp3/0101.mp3</code></td><td><code>playMp3Folder(101)</code></td></tr>
+      <tr><td>12</td><td><code>mp3/0112.mp3</code></td><td><code>playMp3Folder(112)</code></td></tr>
+      <tr><td>Générique buzz</td><td><code>mp3/0001.mp3</code></td><td><code>playMp3Folder(1)</code></td></tr>
+      <tr><td>Victoire</td><td><code>mp3/0002.mp3</code></td><td><code>playMp3Folder(2)</code></td></tr>
+      <tr><td>Échec</td><td><code>mp3/0003.mp3</code></td><td><code>playMp3Folder(3)</code></td></tr>
+    </table>
+    <p>Si le fichier équipe n’existe pas, le Nano joue automatiquement <code>0001.mp3</code> en secours.</p>
+    <p>Au <strong>démarrage</strong>, <code>sonProbeSdAtBoot()</code> teste quels fichiers équipe existent (volume à 0, silencieux) pour accélérer les buzz suivants (~30 ms au lieu de ~100 ms).</p>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.234-261 — buzz équipe avec repli</div>
+<pre class="code">static void jouerBuzzEquipeOuGenerique(DFRobotDFPlayerMini &amp;df, uint8_t team) {
+    if (team &lt; 1 || team &gt; 30) {
+        dfPlayTrack(df, 1);              // 0001.mp3 générique
+        return;
+    }
+    const uint8_t track = (uint8_t)(100 + team);   // eq.1 → 101 → 0101.mp3
+    const uint32_t bit = (1UL &lt;&lt; (team - 1));
+
+    if (teamTrackKnownOk &amp; bit) {
+        dfPlayTrack(df, track);          // déjà testé au boot : lecture rapide
+        return;
+    }
+
+    dfPlayTrack(df, track);
+    if (dfPollFileMissing(df, DF_ERR_POLL_MS)) {
+        dfStopTrack(df);
+        dfPlayTrack(df, 1);              // repli 0001.mp3 si 01NN absent
+        return;
+    }
+    teamTrackKnownOk |= bit;             // mémorise : piste OK
+}</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="son-df" data-keywords="file queue dedupe drain poll radio pause">
+  <div class="block-head head-son">
+    <h2>Nano son — Coexistence radio + DFPlayer</h2>
+    <div class="block-meta">Lignes 31 à 146, 170 à 290</div>
+  </div>
+  <div class="block-body">
+    <p>Le DFPlayer et la radio partagent le processeur. Le firmware alterne écoute radio et commandes DFPlayer :</p>
+
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.170-207 — pause radio pendant commande DF</div>
+<pre class="code">static void dfRadioPauseTx(void) {
+    if (!radioOK) return;
+    radio.stopListening();
+    delayMicroseconds(1200);
+}
+
+static void dfRadioResumeRx(void) {
+    if (!radioOK) return;
+    delayMicroseconds(1600);
+    radio.startListening();
+}
+
+static void dfPlayTrack(DFRobotDFPlayerMini &amp;df, uint8_t track) {
+    dfRadioPauseTx();
+    df.playMp3Folder((int)track);        // ex. 101 → mp3/0101.mp3
+    dfRadioResumeRx();
+}
+
+static void drainDfSerial(DFRobotDFPlayerMini &amp;df, uint16_t totalMs) {
+    const unsigned long t0 = millis();
+    while (millis() - t0 &lt; (unsigned long)totalMs) {
+        pollRadioRx();                   // continue d'écouter la radio !
+        drainSonRxQueue(1);
+        while (df.available()) {
+            (void)df.readType();
+            (void)df.read();
+        }
+        delay(2);
+    }
+}</pre>
+    </div>
+    <ul>
+      <li><strong>File d’attente</strong> (<code>sonRxQ</code>, 12 paquets) — les messages radio reçus pendant une lecture MP3 ne sont pas perdus.</li>
+      <li><strong>pollRadioRx()</strong> — lit la radio dès que possible.</li>
+      <li><strong>dfRadioPauseTx / dfRadioResumeRx</strong> — coupe l’écoute 1–2 ms le temps d’envoyer play/stop au DFPlayer.</li>
+      <li><strong>drainDfSerial()</strong> — vide les retours du DFPlayer tout en continuant d’écouter la radio.</li>
+      <li><strong>playSonCmd()</strong> — stoppe la piste en cours avant un nouveau son (évite blocage si valider/faux arrive vite après un buzz).</li>
+      <li><strong>Re-arm écoute</strong> toutes les 400 ms — filet de sécurité si le chip radio sort du mode réception.</li>
+    </ul>
+    <p>La Mega envoie plusieurs copies de chaque ordre son (rafales) ; le dedupe par <code>seq</code> évite de jouer deux fois le même son.</p>
+  </div>
+</article>
+
+<article class="block" id="son-setup" data-keywords="setup son nano dfplayer boot probe">
+  <div class="block-head head-son">
+    <h2>Nano son — setup()</h2>
+    <div class="block-meta">nano_son_final.ino · L.295 à 342</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.295-342</div>
+<pre class="code">void setup() {
+    pinMode(LED_BUILTIN, OUTPUT);
+
+    // 1. DFPlayer
+    mySoftwareSerial.begin(9600);
+    delay(300);
+    if (monLecteurMP3.begin(mySoftwareSerial, false, true)) {
+        mp3OK = true;
+        monLecteurMP3.setTimeOut(300);
+        monLecteurMP3.volume(DF_VOLUME);
+        monLecteurMP3.EQ(DFPLAYER_EQ_NORMAL);
+        monLecteurMP3.outputDevice(DFPLAYER_DEVICE_SD);
+        drainDfSerial(monLecteurMP3, 80);
+        sonProbeSdAtBoot(monLecteurMP3);   // teste 0101..0130 au boot
+    }
+
+    // 2. Radio réception
+    if (radio.begin()) {
+        radioOK = true;
+        radio.setChannel(RADIO_CHANNEL);
+        radio.setPayloadSize(sizeof(SonPayload));
+        radio.setAutoAck(false);
+        radio.openReadingPipe(1, adresseSon);
+        radio.startListening();
+        // 3 clignotements = OK ; LED 2s fixe = échec
+    }
+}</pre>
+    </div>
+  </div>
+</article>
+
+<article class="block" id="son-loop" data-keywords="loop son rearm poll battement">
+  <div class="block-head head-son">
+    <h2>Nano son — loop()</h2>
+    <div class="block-meta">nano_son_final.ino · L.347 à 366</div>
+  </div>
+  <div class="block-body">
+    <div class="code-wrap">
+      <div class="code-label"><strong>nano_son_final.ino</strong> · L.347-366</div>
+<pre class="code">void loop() {
+    const unsigned long now = millis();
+
+    ledPulseUpdate();
+
+    if (radioOK) {
+        static unsigned long rearmEcouteMs = 0;
+        if (now - rearmEcouteMs &gt; SON_REARM_LISTEN_MS) {  // 400 ms
+            rearmEcouteMs = now;
+            radio.startListening();      // filet : réactive l'écoute
+        }
+        pollRadioRx();
+        drainSonRxQueue(4);              // traite jusqu'à 4 sons en file
+    }
+
+    if (radioOK &amp;&amp; now - dernierBattement &gt; 2000) {
+        ledFlashMs(20);                  // battement = système vivant
+        dernierBattement = now;
+    }
+}</pre>
+    </div>
+    <p>Pas de boutons, pas de port PC : carte autonome alimentée en salle.</p>
+  </div>
+</article>
+
+<article class="block" id="schema" data-keywords="schema flux global mega nano">
+  <div class="block-head">
+    <h2>Schéma global — Mega et Nanos</h2>
+  </div>
+  <div class="block-body">
+    <div class="flow">                    ┌─────────────────────────────────────┐
+                    │         ARDUINO MEGA                  │
+                    │  megaf.ino                     │
+                    │  • Reçoit buzz (00001)                │
+                    │  • Reçoit animateur 88/99 (00001)     │
+                    │  • DMX projecteurs                    │
+                    │  • PC série : BUZZ:n, config          │
+                    │  • Émet sons (00002)                  │
+                    └──────────┬──────────────┬─────────────┘
+                               │              │
+              pipe 00001       │              │  pipe 00002
+              (RadioMsg)       │              │  (SonPayload)
+                               │              │
+     ┌─────────────────────────┼──────────────┼─────────────────────────┐
+     │                         │              │                         │
+     ▼                         ▼              ▼                         ▼
+┌─────────┐              ┌─────────┐    ┌──────────┐              ┌─────────┐
+│ Nano    │  × N         │ Nano    │    │ Nano     │              │  PC     │
+│ ÉQUIPE  │  équipes     │ANIMATEUR│    │   SON    │              │ Quiz    │
+│ bouton  │              │ 88 / 99 │    │ DFPlayer │              │ Board   │
+│ kind=1  │              │ kind=2  │    │ MP3 SD   │              │ (opt.)  │
+└─────────┘              └─────────┘    └──────────┘              └─────────┘
+  émetteur                 émetteur       récepteur                  Serial3
+
+Séquence typique :
+  1. Joueur appuie → Nano équipe → Mega (kind=1, value=N)
+  2. Mega → DMX couleur + PC « BUZZ:N » + radio son cmd 200
+  3. Nano son → joue 01NN.mp3
+  4. Animateur VALIDER → Nano animateur → Mega (99) → flash vert + son 201
+     ou FAUX → (88) → flash rouge + son 202, autres peuvent rebuzzer</div>
+    <p>Voir aussi : <code>docs/megaf_explication.html</code> pour le détail du firmware Mega.</p>
+  </div>
+</article>
+
+</main>
+</div>
+
+<footer>
+  Nanos Arduino — buzzer_nano_equipe.ino · nano_animateur_final.ino · nano_son_final.ino · Imprimer (Ctrl+P) pour PDF
+</footer>
+
+<script>
+document.getElementById('btn-print').addEventListener('click', () => window.print());
+document.getElementById('search').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.block, .intro').forEach(el => {
+    if (!q) { el.classList.remove('hidden'); return; }
+    el.classList.toggle('hidden', !el.textContent.toLowerCase().includes(q));
+  });
+});
+</script>
+</body>
+</html>

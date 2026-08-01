@@ -2,6 +2,8 @@
 
 Ce document décrit les **trois configurations** possibles entre **Mega** (DMX + logique jeu + radio), **nano son** (DFPlayer + radio), et le **logiciel** `interface/interface_30eq.py` (scores, sons PC, port série).
 
+**Règle matérielle** : le PC n’est branché en série qu’**à une seule carte à la fois** — soit la **Mega** (TTL / USB), soit le **nano son** (USB), **jamais les deux en même temps**. En mode 3, la Mega reste alimentée pour le DMX et la radio, mais **sans** câble série vers le PC ; tout passe par le nano son (USB).
+
 ---
 
 ## Vue d’ensemble
@@ -24,7 +26,7 @@ Ce document décrit les **trois configurations** possibles entre **Mega** (DMX +
 
 ## Mode 2 — PC branché sur la **Mega** (usage principal)
 
-- Câble **USB‑UART** sur le port prévu pour le PC (souvent **TX3/RX3** de la Mega, voir commentaires dans `mega30Equipe.ino`).
+- Câble **USB‑UART** sur le port prévu pour le PC (souvent **TX3/RX3** de la Mega, voir commentaires dans `megaf.ino`).
 - Le logiciel reçoit :
   - **`BUZZ:n`** quand une équipe buzze ;
   - **`CMD_SENT:RESET_ALL`** / **`CMD_SENT:RELANCE_PARTIEL`** quand l’animateur utilise les **boutons physiques** (nano animateur → Mega).
@@ -37,9 +39,9 @@ Ce document décrit les **trois configurations** possibles entre **Mega** (DMX +
 
 - Dans le logiciel, choisis le **COM du nano son**. Après connexion, le programme envoie `WHO` : si la réponse contient **`READY_NANO_SON`**, le mode **nano** est actif.
 - **Sons sur le PC (`AUDIO_PC`, défaut à la connexion)**  
-  - Le nano **ne joue pas** sur le DF pour les événements synchronisés : il renvoie des lignes **`FWD_SON:200:N`**, **`FWD_SON:201`**, **`FWD_SON:202`** au PC pour que **pygame** joue (tu peux **débrancher le HP** du module DF pour n’entendre que le PC).
-  - **Buzz** : `FWD_SON:200` déclenche le même traitement qu’un **`BUZZ:`** (état BUZZÉ, `equipe_N.mp3` si présent dans `sounds/`).
-  - **Valider / refuser** depuis la Mega (radio **201** / **202**) : si une équipe est déjà BUZZÉE, **`FWD_SON:201`** / **`202`** mettent à jour **points et état** comme les boutons VALIDER/FAUX du logiciel, **sans** renvoyer `RESET_ALL` / `RELANCE_PARTIEL` sur le USB (déjà traité côté Mega).
+  - Le nano **ne joue pas** sur le DF pour le buzz : il renvoie **`FWD_SON:200:N`** au PC pour que **pygame** joue (tu peux **débrancher le HP** du module DF pour n’entendre que le PC).
+  - **Buzz** : `FWD_SON:200` = même traitement qu’un **`BUZZ:`** en mode 2 (état BUZZÉ, `equipe_N.mp3` si présent).
+  - **Valider / refuser** (animateur → Mega → radio **201** / **202** → nano) : le nano envoie **`CMD_SENT:RESET_ALL`** / **`CMD_SENT:RELANCE_PARTIEL`** sur l’USB → **points et état** comme en mode 2, sans second câble vers la Mega.
 - **Sons sur la carte SD (`AUDIO_DF`)**  
   - Décoche l’option « sons sur le PC » dans l’interface (ou envoi série `AUDIO_DF`) : le nano rejoue sur le **DFPlayer** comme en mode 1 ; fichiers **`mp3/0101.mp3`** … **`0130.mp3`** (équivalent `equipe_N` côté PC).
 
@@ -68,15 +70,19 @@ La Mega envoie toujours le **numéro d’équipe 1…30** dans le payload radio 
 ## Fiabilité radio Mega ↔ nano son (nRF24L01)
 
 - **Même canal et adresse** : canal **108**, pipe **`00002`** pour les paquets `SonPayload`.
-- **Buzz (200)** : la Mega envoie **une seule** copie (un double envoi provoquait souvent **deux lectures** côté nano → **double son** sur le DFPlayer).
-- **Victoire / échec (201 / 202)** : **deux copies** avec ~**8 ms** d’écart (lien sans ACK) ; le nano **dédoublonne** déjà les 201/202 rapprochés pour ne pas rejouer deux fois le même effet.
+- **Buzz (200)** : la Mega envoie **6 copies** espacées de **~14 ms** (~80 ms au total) avec un **numéro de séquence** (`seq`) ; le nano met les paquets en **file** et **dédoublonne** par `cmd`+`team`+`seq` (~450 ms). DFPlayer : lecture **immédiate** si la piste équipe a déjà réussi une fois (~30 ms), sinon test erreur **~100 ms** max.
+- **Victoire / échec (201 / 202)** : **4 copies** ~**18 ms** ; même dédoublonnage par `seq` (~350 ms).
 - **Bonnes pratiques** : alimentation stable (condensateur près du nRF24), antennes correctes, distance raisonnable ; le **250 kbps** aide la portée.
 
 ---
 
-## Rappel câblage série
+## Rappel câblage série (un seul port PC)
 
-- **Buzz + animateur physique → scores à jour** : le flux **`BUZZ:`** et **`CMD_SENT:`** sort sur le **port PC de la Mega** (TTL).  
-- En **mode 3** seul (PC sur nano USB), les **sons et points** suivent quand même la radio via **`FWD_SON:`** ; pour recevoir **aussi** les lignes série **uniquement** émises par la Mega sans passer par le nano, il faut **en plus** un lien série vers la Mega (autre PC, ou second port si matériel prévu).
+| Mode | Câble PC | Lignes reçues par le Quiz Board |
+|------|----------|--------------------------------|
+| **2 — Mega** | TTL Mega (Serial3) | `BUZZ:n`, `CMD_SENT:…` |
+| **3 — Nano son** | USB nano son | `FWD_SON:200:n` (buzz), `CMD_SENT:…` (valider / faux via radio) |
+
+Pas de branchement simultané Mega + nano son sur le même PC.
 
 Pour lancer l’interface et les prérequis Python, voir le [README](README.md).
