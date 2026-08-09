@@ -1,24 +1,28 @@
-#include <SPI.h>
-#include <nRF24L01.h>
-#include <RF24.h>
 #include <DMXSerial.h>
 #include <EEPROM.h>
 #include <string.h>
 #include <stdlib.h>
-#include <avr/wdt.h> // [FIX] watchdog matériel pour éviter un blocage définitif
+#include <avr/wdt.h>
+
+// =========================================================
+// SÉCURITÉ WATCHDOG : désactivation ultra-précoce
+// =========================================================
+uint8_t mcusrSauvegarde __attribute__ ((section (".noinit")));
+void getMcusrEtStopperWdt(void) __attribute__((naked)) __attribute__((section(".init3")));
+void getMcusrEtStopperWdt(void) {
+    mcusrSauvegarde = MCUSR;
+    MCUSR = 0;
+    wdt_disable();
+}
 
 // =========================================================
 // CONFIGURATION MATÉRIELLE
 // =========================================================
-RF24 radio(9, 53);
-
-const byte adresseBuzzers[6] = "00001";
-const byte adresseSon[6]     = "00002";
-
-#define RADIO_CHANNEL  108
 #define LED 13
 #define MAGIC_NUMBER 0xAB
-#define PC_SERIAL Serial3
+#define PC_SERIAL  Serial3   // liaison vers le PC (logiciel Node.js)
+#define NANO_SERIAL Serial2  // liaison vers le RF-Nano (RX2=17, TX2=16)
+#define NANO_BAUD 19200
 
 // =========================================================
 // STRUCTURE EEPROM
@@ -37,94 +41,9 @@ struct QuizConfig {
 // =========================================================
 bool jeuVerrouille         = false;
 bool dejaJoue[31]          = {false};
-bool radioOK               = false;
-unsigned long dernierBattement  = 0;
 int dernierSignal          = -1;
 unsigned long dernierSignalTemps = 0;
-unsigned long dernierAliveMs   = 0; // [FIX] journal de vie périodique sur PC_SERIAL
-
-// [FIX] Auto-surveillance radio : détecte une puce nRF24 qui a décroché
-// (mais qui ne bloque pas le SPI) et tente une réinitialisation.
-// ATTENTION : ceci ne protège PAS contre un blocage SPI dur en plein
-// milieu d'un radio.write()/available() — c'est le rôle du watchdog.
-unsigned long dernierCheckRadio = 0;
-#define RADIO_CHECK_INTERVAL_MS 5000
-
-// =========================================================
-// RADIO STRUCTURES
-// =========================================================
-struct RadioMsg {
-    uint8_t kind;   // 1=BUZZ_EQUIPE, 2=CMD
-    uint8_t value;  // BUZZ: team 1..30 ; CMD: 88/99
-    uint16_t seq;
-};
-static uint16_t lastSeqEquipe[30] = {0};
-static uint16_t lastSeqCmd = 0;
-static bool lastSeqInitEquipe[30] = {false};
-static bool lastSeqInitCmd = false;
-static uint16_t seqOutboundCmd = 0;
-
-struct SonPayload {
-    uint16_t cmd;
-    uint8_t team;
-    uint8_t seq;
-};
-static uint8_t sonSeqCounter = 0;
-
-// MACHINE D'ÉTAT POUR L'ENVOI DU SON SANS DELAY()
-bool sonEnvoiActif = false;
-SonPayload sonQueuePayload;
-uint8_t sonPhase = 0;
-uint8_t sonBurstIdx = 0;
-unsigned long sonProchainEnvoiMs = 0;
-uint8_t sonBurstN = 0;
-uint8_t sonGapMs = 0;
-uint8_t sonPauseMs = 0;
-
-static void radioSendCmdToBuzzers(uint8_t value) {
-    RadioMsg msg = {2, value, ++seqOutboundCmd};
-    radio.stopListening();
-    radio.openWritingPipe(adresseBuzzers);
-    radio.write(&msg, sizeof(msg));
-    radio.openWritingPipe(adresseBuzzers); // Sécurité ré-écriture
-    radio.startListening();
-}
-
-// [FIX] Réinitialise complètement la radio avec la même config que setup().
-// Appelée par verifierEtReanimerRadio() si la puce ne répond plus.
-static void reinitialiserRadio() {
-    if (radio.begin()) {
-        radioOK = true;
-        radio.setChannel(RADIO_CHANNEL);
-        radio.setAddressWidth(5);
-        radio.setPALevel(RF24_PA_MAX);
-        radio.setDataRate(RF24_250KBPS);
-        radio.setCRCLength(RF24_CRC_16);
-        radio.setPayloadSize(sizeof(RadioMsg));
-        radio.setAutoAck(true);
-        radio.setRetries(10, 15);
-        radio.openReadingPipe(1, adresseBuzzers);
-        radio.startListening();
-        sonEnvoiActif = false; // on annule un éventuel envoi son resté en suspens
-        PC_SERIAL.println("INFO:RADIO_REINIT_OK");
-    } else {
-        radioOK = false;
-        PC_SERIAL.println("ERR:RADIO_REINIT_FAILED");
-    }
-}
-
-// [FIX] Vérification périodique et non bloquante de l'état de la puce radio.
-static void verifierEtReanimerRadio() {
-    if (!radioOK) return;
-    unsigned long now = millis();
-    if (now - dernierCheckRadio < RADIO_CHECK_INTERVAL_MS) return;
-    dernierCheckRadio = now;
-
-    if (!radio.isChipConnected()) {
-        PC_SERIAL.println("WARN:RADIO_LOST_REINIT");
-        reinitialiserRadio();
-    }
-}
+unsigned long dernierAliveMs = 0;
 
 // ---- LED non-bloquante ----
 unsigned long ledPulseUntil = 0;
@@ -139,16 +58,22 @@ inline void ledUpdate() {
     }
 }
 
-// ---- Buffer ligne série PC ----
+// ---- Buffers lignes série (PC et Nano séparés) ----
 #define SERIAL_BUF_LEN 96
 char serialBuf[SERIAL_BUF_LEN];
 uint8_t serialLen = 0;
+
+char nanoBuf[SERIAL_BUF_LEN];
+uint8_t nanoLen = 0;
 
 void setProjecteur(int addr, int r, int g, int b);
 void eteindreLumieres();
 void flashDmxUpdate();
 void flashDmxStartVert();
 void flashDmxStartRouge();
+void allumerCouleurEquipe(int equipe);
+void parseCommande(const char *line);
+void parseLigneNano(const char *line);
 
 // ---- Clignotement DMX validation/refus non-bloquant ----
 #define FLASH_DMX_HALF_MS 150
@@ -188,14 +113,6 @@ void flashDmxUpdate() {
     }
 }
 
-// ---- BUZZ SIMULTANÉS - Fenêtre 50ms ----
-#define FENETRE_MS   50
-#define MAX_BUFFER    8
-int  bufferSignaux[MAX_BUFFER];
-int  nbBuffer        = 0;
-bool fenetreActive   = false;
-unsigned long debutFenetre = 0;
-
 void initialiserConfigParDefaut() {
     settings.magic     = MAGIC_NUMBER;
     settings.nbEquipes = 8;
@@ -229,75 +146,21 @@ void initialiserConfigParDefaut() {
     }
     settings.couleurs[6][1][0] = 255; settings.couleurs[6][1][1] = 0; settings.couleurs[6][1][2] = 128;
     settings.couleurs[7][1][0] = 0; settings.couleurs[7][1][1] = 0; settings.couleurs[7][1][2] = 255;
-    EEPROM.put(0, settings); // Sûr ici : appelé uniquement depuis setup(), avant wdt_enable()
+    EEPROM.put(0, settings);
 }
 
-// Initialise la structure de timing d'envoi du son sans bloquer le microcontrôleur
-void envoyerSon(uint16_t cmd, uint8_t team) {
-    if (!radioOK) return;
-
-    // [FIX] Note explicite : si un envoi son est déjà en cours (sonEnvoiActif == true),
-    // cet appel écrase silencieusement la séquence en cours par la nouvelle.
-    // C'est le comportement voulu (ex: RESET_ALL doit couper le son du buzz
-    // précédent plutôt que d'attendre la fin de la salve), documenté ici pour
-    // éviter toute confusion lors d'une future modification.
-    sonQueuePayload.cmd = cmd;
-    sonQueuePayload.team = team;
-    sonQueuePayload.seq = (uint8_t)(++sonSeqCounter);
-
-    sonBurstN   = (cmd == 200) ? 4 : 3;
-    sonGapMs    = (cmd == 200) ? 12 : 14;
-    sonPauseMs  = (cmd == 200) ? 42 : 36;
-
-    sonPhase = 0;
-    sonBurstIdx = 0;
-    sonEnvoiActif = true;
-    sonProchainEnvoiMs = millis();
-
-    radio.stopListening();
-    radio.flush_tx();
-    radio.openWritingPipe(adresseSon);
-    radio.setAutoAck(false);
-}
-
-// Gérée de manière asynchrone dans la loop
-void updateRadioSonAsynchrone() {
-    if (!sonEnvoiActif) return;
-
-    unsigned long now = millis();
-    if ((long)(now - sonProchainEnvoiMs) < 0) return;
-
-    // Écriture brute non bloquante vers le Nano Son
-    for (uint8_t retry = 0; retry < 4; retry++) { // Réduit à 4 essais rapides
-        if (radio.write(&sonQueuePayload, sizeof(sonQueuePayload), true)) break;
-        delayMicroseconds(300);
-    }
-
-    sonBurstIdx++;
-    if (sonBurstIdx < sonBurstN) {
-        sonProchainEnvoiMs = now + sonGapMs;
-    } else {
-        // Fin du premier burst
-        if (sonPhase == 0) {
-            sonPhase = 1;
-            sonBurstIdx = 0;
-            sonProchainEnvoiMs = now + sonPauseMs;
-        } else {
-            // Fin de la double salve globale -> Restauration du mode écoute Buzzers
-            sonEnvoiActif = false;
-            radio.setAutoAck(true);
-            radio.openWritingPipe(adresseBuzzers);
-            radio.startListening();
-        }
-    }
+// =========================================================
+// RELAIS VERS LE NANO (remplace radioSendCmdToBuzzers / envoyerSon)
+// =========================================================
+void envoyerCmdAuxEquipes(uint8_t value) {
+    NANO_SERIAL.print("CMD:");
+    NANO_SERIAL.println(value);
 }
 
 // =========================================================
 // SETUP
 // =========================================================
 void setup() {
-    wdt_disable(); // [FIX] désactive un éventuel watchdog résiduel avant tout le reste
-
     pinMode(LED, OUTPUT);
     DMXSerial.init(DMXController);
     eteindreLumieres();
@@ -306,92 +169,45 @@ void setup() {
     if (settings.magic != MAGIC_NUMBER ||
         settings.nbEquipes < 1 || settings.nbEquipes > 30 ||
         settings.nbCanaux  < 1 || settings.nbCanaux  > 30) {
-        initialiserConfigParDefaut(); // peut prendre plusieurs secondes, sûr ici (watchdog pas encore actif)
+        initialiserConfigParDefaut();
     }
 
     PC_SERIAL.begin(9600);
+    NANO_SERIAL.begin(NANO_BAUD);
 
-    if (radio.begin()) {
-        radioOK = true;
-        radio.setChannel(RADIO_CHANNEL);
-        radio.setAddressWidth(5);
-        radio.setPALevel(RF24_PA_MAX);
-        radio.setDataRate(RF24_250KBPS);
-        radio.setCRCLength(RF24_CRC_16);
-        radio.setPayloadSize(sizeof(RadioMsg));
-        radio.setAutoAck(true);
-        radio.setRetries(10, 15);
-        radio.openReadingPipe(1, adresseBuzzers);
-        radio.startListening();
-
-        for (int i = 0; i < 3; i++) {
-            digitalWrite(LED, HIGH); delay(60);
-            digitalWrite(LED, LOW);  delay(60);
-        }
-    } else {
-        radioOK = false;
-        digitalWrite(LED, HIGH); delay(1000); digitalWrite(LED, LOW);
+    for (int i = 0; i < 3; i++) {
+        digitalWrite(LED, HIGH);
+        unsigned long t0 = millis();
+        while (millis() - t0 < 60) {}
+        digitalWrite(LED, LOW);
+        t0 = millis();
+        while (millis() - t0 < 60) {}
     }
 
-    RadioMsg poubelle;
-    while (radio.available()) { radio.read(&poubelle, sizeof(poubelle)); }
     eteindreLumieres();
-
-    wdt_enable(WDTO_4S); // [FIX] reset matériel automatique si loop() ne revient pas sous 4s
+    wdt_enable(WDTO_4S);
 }
 
 // =========================================================
 // LOOP PRINCIPALE
 // =========================================================
 void loop() {
-    wdt_reset(); // [FIX] doit être en tout début de loop() : "je suis vivant"
+    wdt_reset();
 
     ledUpdate();
     flashDmxUpdate();
-    updateRadioSonAsynchrone(); // Traitement du son en arrière-plan (0% de blocage)
-    verifierEtReanimerRadio();  // [FIX] auto-surveillance radio (non bloquant)
 
-    // Traiter fenêtre expirée (50ms)
-    if (fenetreActive && millis() - debutFenetre >= FENETRE_MS) {
-        bool traite = false; // [FIX] pour diagnostic
-        for (int i = 0; i < nbBuffer; i++) {
-            int sig = bufferSignaux[i];
-            if (sig >= 1 && sig <= settings.nbEquipes && !dejaJoue[sig] && !jeuVerrouille) {
-                jeuVerrouille = true;
-                dejaJoue[sig] = true;
-                allumerCouleurEquipe(sig);
-                PC_SERIAL.print("BUZZ:"); PC_SERIAL.println(sig);
-                envoyerSon(200, (uint8_t)sig);
-                traite = true;
-                break;
-            }
-        }
-        if (!traite && nbBuffer > 0) {
-            // [FIX] Diagnostic : des buzz sont arrivés mais aucun n'a été traité.
-            // locked=1 -> jeu verrouillé (pas de RESET_ALL/RELANCE_PARTIEL envoyé entre les manches)
-            // locked=0 -> équipe(s) déjà jouée(s) ce tour (dejaJoue) ou hors plage
-            PC_SERIAL.print("IGNORED:locked="); PC_SERIAL.print(jeuVerrouille ? 1 : 0);
-            PC_SERIAL.print(",count="); PC_SERIAL.println(nbBuffer);
-        }
-        fenetreActive = false;
-        nbBuffer = 0;
-        RadioMsg p;
-        while (radio.available()) { radio.read(&p, sizeof(p)); } // Nettoyage complet du buffer
-    }
-
-    // BATTEMENT LED (Non-bloquant)
-    if (radioOK && millis() - dernierBattement > 2000) {
+    // BATTEMENT LED (Non-bloquant) — vivant tant que la loop tourne
+    static unsigned long dernierBattement = 0;
+    if (millis() - dernierBattement > 2000) {
         ledPulse(40);
         dernierBattement = millis();
     }
 
-    // [FIX] Journal de vie périodique sur PC_SERIAL, indépendant de radioOK :
-    // preuve horodatée en cas d'incident. Si ces lignes s'arrêtent net -> freeze confirmé.
-    // Si elles continuent avec locked=1 pendant que les équipes buzzent -> jeu verrouillé, pas un freeze.
+    // Journal de vie périodique
     if (millis() - dernierAliveMs > 2000) {
         dernierAliveMs = millis();
         PC_SERIAL.print("ALIVE:"); PC_SERIAL.print(millis());
-        PC_SERIAL.print(",radioOK="); PC_SERIAL.print(radioOK ? 1 : 0);
         PC_SERIAL.print(",locked="); PC_SERIAL.println(jeuVerrouille ? 1 : 0);
     }
 
@@ -400,8 +216,8 @@ void loop() {
         dernierSignal = -1;
     }
 
-    // RÉCEPTION série PC - Non bloquant
-    while (PC_SERIAL.available() > 0) { // Utilisation d'un while fluide pour purger le flux PC
+    // RÉCEPTION série PC
+    while (PC_SERIAL.available() > 0) {
         char c = (char)PC_SERIAL.read();
         if (c == '\r') continue;
         if (c == '\n') {
@@ -411,96 +227,85 @@ void loop() {
             }
             uint8_t start = 0;
             while (serialBuf[start] == ' ' || serialBuf[start] == '\t') start++;
-            if (serialLen > start) {
-                parseCommande(serialBuf + start);
-            }
+            if (serialLen > start) parseCommande(serialBuf + start);
             serialLen = 0;
+        } else if (serialLen < SERIAL_BUF_LEN - 1) {
+            serialBuf[serialLen++] = c;
         } else {
-            if (serialLen < SERIAL_BUF_LEN - 1) {
-                serialBuf[serialLen++] = c;
-            } else {
-                serialLen = 0;
-            }
+            serialLen = 0;
         }
     }
 
-    // RÉCEPTION RADIO buzzers
-    // [FIX] "while" au lieu de "if" : vide complètement le tampon matériel (jusqu'à 3
-    // paquets côté nRF24) à chaque tour de boucle, au lieu de n'en traiter qu'un seul.
-    // Avec plusieurs équipes qui buzzent en rafale, un simple "if" pouvait laisser des
-    // paquets s'accumuler et saturer le tampon, provoquant la perte de tous les buzz
-    // suivants tant que loop() ne repassait pas par ce point.
-    while (!sonEnvoiActif && radio.available()) {
-        RadioMsg msg = {0, 0, 0};
-        radio.read(&msg, sizeof(msg));
-        int signal = (int)msg.value;
-
-        bool duplicate = false;
-        if (msg.kind == 1) {
-            int idx = signal - 1;
-            if (idx >= 0 && idx < settings.nbEquipes) {
-                if (lastSeqInitEquipe[idx] && lastSeqEquipe[idx] == msg.seq) {
-                    duplicate = true;
-                } else {
-                    lastSeqEquipe[idx] = msg.seq;
-                    lastSeqInitEquipe[idx] = true;
-                }
-            }
-        } else if (msg.kind == 2) {
-            if (lastSeqInitCmd && lastSeqCmd == msg.seq) {
-                duplicate = true;
-            } else {
-                lastSeqCmd = msg.seq;
-                lastSeqInitCmd = true;
-            }
+    // RÉCEPTION série NANO (buzz déjà résolus, un seul gagnant par message)
+    while (NANO_SERIAL.available() > 0) {
+        char c = (char)NANO_SERIAL.read();
+        if (c == '\r') continue;
+        if (c == '\n') {
+            nanoBuf[nanoLen] = '\0';
+            if (nanoLen > 0) parseLigneNano(nanoBuf);
+            nanoLen = 0;
+        } else if (nanoLen < SERIAL_BUF_LEN - 1) {
+            nanoBuf[nanoLen++] = c;
         } else {
-            if (signal == dernierSignal) { duplicate = true; }
+            nanoLen = 0;
         }
+    }
+}
 
-        if (!duplicate) {
-            dernierSignal      = signal;
-            dernierSignalTemps = millis();
-            ledPulse(60);
+// =========================================================
+// ACTIONS DE JEU (déclenchables par le PC OU le Nano animateur)
+// =========================================================
+void actionResetAll() {
+    envoyerCmdAuxEquipes(99);
+    PC_SERIAL.println("CMD_SENT:RESET_ALL");
+    // Le son est déclenché par le logiciel PC lui-même à réception de "CMD_SENT:RESET_ALL"
+    flashDmxStartVert();
+    ledPulse(150);
+    for (int i = 0; i < 31; i++) dejaJoue[i] = false;
+    jeuVerrouille = false;
+    dernierSignal = -1;
+}
 
-            // C'est une équipe -> traitement fenêtre simultanée
-            if (msg.kind == 1 && signal >= 1 && signal <= settings.nbEquipes) {
-                if (!fenetreActive) {
-                    fenetreActive = true;
-                    debutFenetre  = millis();
-                    nbBuffer      = 0;
-                }
-                bool dejaDedans = false;
-                for (int i = 0; i < nbBuffer; i++) {
-                    if (bufferSignaux[i] == signal) { dejaDedans = true; break; }
-                }
-                if (!dejaDedans && nbBuffer < MAX_BUFFER) {
-                    bufferSignaux[nbBuffer++] = signal;
-                }
-            }
+void actionRelancePartiel() {
+    envoyerCmdAuxEquipes(88);
+    PC_SERIAL.println("CMD_SENT:RELANCE_PARTIEL");
+    // Le son est déclenché par le logiciel PC lui-même à réception de "CMD_SENT:RELANCE_PARTIEL"
+    flashDmxStartRouge();
+    ledPulse(150);
+    jeuVerrouille = false;
+    dernierSignal = -1;
+}
 
-            // 99 = RESET_ALL
-            else if (msg.kind == 2 && signal == 99) {
-                PC_SERIAL.println("CMD_SENT:RESET_ALL");
-                envoyerSon(201, 0);
-                for (int i = 0; i < 31; i++) dejaJoue[i] = false;
-                jeuVerrouille = false;
-                dernierSignal = -1;
-                flashDmxStartVert();
-                ledPulse(150);
-                while (radio.available()) { RadioMsg poubelle; radio.read(&poubelle, sizeof(poubelle)); }
-            }
+// =========================================================
+// TRAITEMENT DES LIGNES REÇUES DU NANO (buzz résolus + commandes
+// venant du Nano animateur sans fil, déjà validées par son pipe
+// radio dédié côté RF-Nano)
+// =========================================================
+void parseLigneNano(const char *line) {
+    if (line[0] == 'B' && line[1] == 'U' && line[2] == 'Z' && line[3] == 'Z' && line[4] == ':') {
+        int signal = (int)strtol(line + 5, NULL, 10);
 
-            // 88 = RELANCE_PARTIEL
-            else if (msg.kind == 2 && signal == 88) {
-                PC_SERIAL.println("CMD_SENT:RELANCE_PARTIEL");
-                envoyerSon(202, 0);
-                jeuVerrouille = false;
-                dernierSignal = -1;
-                flashDmxStartRouge();
-                ledPulse(150);
-                while (radio.available()) { RadioMsg poubelle; radio.read(&poubelle, sizeof(poubelle)); }
-            }
+        if (signal == dernierSignal) return; // anti-doublon simple sur répétition immédiate
+        dernierSignal = signal;
+        dernierSignalTemps = millis();
+        ledPulse(60);
+
+        if (signal >= 1 && signal <= settings.nbEquipes && !dejaJoue[signal] && !jeuVerrouille) {
+            jeuVerrouille = true;
+            dejaJoue[signal] = true;
+            allumerCouleurEquipe(signal);
+            PC_SERIAL.print("BUZZ:"); PC_SERIAL.println(signal);
+            // Le son est déclenché par le logiciel PC lui-même à réception de "BUZZ:n"
+        } else {
+            PC_SERIAL.print("IGNORED:locked="); PC_SERIAL.print(jeuVerrouille ? 1 : 0);
+            PC_SERIAL.print(",team="); PC_SERIAL.println(signal);
         }
+    }
+    else if (line[0] == 'C' && line[1] == 'M' && line[2] == 'D' && line[3] == ':') {
+        // Commande venant du Nano animateur sans fil (pipe dédié, origine fiable)
+        int v = (int)strtol(line + 4, NULL, 10);
+        if (v == 99) actionResetAll();
+        else if (v == 88) actionRelancePartiel();
     }
 }
 
@@ -515,9 +320,7 @@ static int parse_int(const char *s, const char **endptr) {
 }
 
 static bool starts_with(const char *s, const char *prefix) {
-    while (*prefix) {
-        if (*s++ != *prefix++) return false;
-    }
+    while (*prefix) { if (*s++ != *prefix++) return false; }
     return true;
 }
 
@@ -542,33 +345,15 @@ void parseCommande(const char *line) {
     }
 
     if (strcmp(line, "RESET_ALL") == 0) {
-        radioSendCmdToBuzzers(99);
-        PC_SERIAL.println("CMD_SENT:RESET_ALL");
-        envoyerSon(201, 0);
-        flashDmxStartVert();
-        ledPulse(150);
-        for (int i = 0; i < 31; i++) dejaJoue[i] = false;
-        jeuVerrouille = false;
-        dernierSignal = -1;
-        fenetreActive = false;
-        nbBuffer = 0;
+        actionResetAll();
     }
     else if (strcmp(line, "RELANCE_PARTIEL") == 0) {
-        radioSendCmdToBuzzers(88);
-        PC_SERIAL.println("CMD_SENT:RELANCE_PARTIEL");
-        envoyerSon(202, 0);
-        flashDmxStartRouge();
-        ledPulse(150);
-        jeuVerrouille = false;
-        dernierSignal = -1;
-        fenetreActive = false;
-        nbBuffer = 0;
+        actionRelancePartiel();
     }
     else if (starts_with(line, "SET_PATCH:")) {
         int vals[5] = {0};
         uint8_t n = parse_colon_ints(line + 9, vals, 5);
         if (n >= 5) {
-            // [FIX] bornage : nbCanaux entre 1 et 30, offsets entre 0 et nbCanaux-1
             int nbCanauxTmp = constrain(vals[0], 1, 30);
             settings.nbCanaux = nbCanauxTmp;
             settings.offDim   = constrain(vals[1], 0, nbCanauxTmp - 1);
@@ -577,7 +362,7 @@ void parseCommande(const char *line) {
             settings.offB     = constrain(vals[4], 0, nbCanauxTmp - 1);
             PC_SERIAL.println("CONF:PATCH_OK");
         } else {
-            PC_SERIAL.println("ERR:PATCH_INCOMPLETE"); // [FIX] retour d'erreur explicite
+            PC_SERIAL.println("ERR:PATCH_INCOMPLETE");
         }
     }
     else if (starts_with(line, "SET_NB_EQ:")) {
@@ -591,7 +376,6 @@ void parseCommande(const char *line) {
         if (n >= 2) {
             int idx = vals[0];
             int adr = vals[1];
-            // [FIX] validation de la plage DMX (1-512) avant écriture, avec retour d'erreur
             if (idx >= 0 && idx < 30 && adr >= 1 && adr <= 512) {
                 settings.adressesDMX[idx] = adr;
                 PC_SERIAL.println("CONF:ADR_OK");
@@ -599,7 +383,7 @@ void parseCommande(const char *line) {
                 PC_SERIAL.println("ERR:ADR_OUT_OF_RANGE");
             }
         } else {
-            PC_SERIAL.println("ERR:ADR_INCOMPLETE"); // [FIX]
+            PC_SERIAL.println("ERR:ADR_INCOMPLETE");
         }
     }
     else if (starts_with(line, "SET_COL:")) {
@@ -614,22 +398,22 @@ void parseCommande(const char *line) {
                 settings.couleurs[eq][grp][1] = (byte)constrain(g, 0, 255);
                 settings.couleurs[eq][grp][2] = (byte)constrain(b, 0, 255);
                 PC_SERIAL.println("CONF:COL_OK");
+            } else {
+                PC_SERIAL.println("ERR:COL_OUT_OF_RANGE");
             }
+        } else {
+            PC_SERIAL.println("ERR:COL_INCOMPLETE");
         }
     }
     else if (strcmp(line, "SAVE_CONFIG") == 0) {
         settings.magic = MAGIC_NUMBER;
-        // [FIX] IMPORTANT : EEPROM.put() sur ~2.7 Ko peut prendre jusqu'à ~9s dans le
-        // pire cas (tous les octets modifiés). Ça dépasse le délai du watchdog (4s) :
-        // on le désactive temporairement pour ne pas provoquer un reset en pleine
-        // écriture (ce qui corromprait l'EEPROM).
         wdt_disable();
         EEPROM.put(0, settings);
         wdt_enable(WDTO_4S);
         PC_SERIAL.println("CONF:SAVED_TO_EEPROM");
     }
     else if (strcmp(line, "RESET_V1") == 0) {
-        wdt_disable(); // [FIX] même raison que SAVE_CONFIG (initialiserConfigParDefaut fait un EEPROM.put)
+        wdt_disable();
         initialiserConfigParDefaut();
         wdt_enable(WDTO_4S);
         PC_SERIAL.println("CONF:V1_RESTORED");
@@ -657,9 +441,6 @@ void eteindreLumieres() {
         }
     }
 }
-
-void clignoterVert() { flashDmxStartVert(); }
-void clignoterRouge() { flashDmxStartRouge(); }
 
 void allumerCouleurEquipe(int equipe) {
     eteindreLumieres();
