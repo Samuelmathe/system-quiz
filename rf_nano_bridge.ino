@@ -2,16 +2,19 @@
 // RF-NANO — PONT RADIO nRF24 <-> SÉRIE (vers le Mega)
 // =========================================================
 // Rôle : ce Nano possède désormais la SEULE puce nRF24 du système.
-// Il fait 2 choses :
+// Il fait 3 choses :
 //   1) Écoute les buzz des équipes (pipe "adresseBuzzers"), résout
 //      qui a buzzé en premier (fenêtre 50ms + anti-doublon), et
 //      envoie "BUZZ:<n>\n" au Mega par liaison série (TX/RX).
 //   2) Reçoit du Mega des ordres "CMD:99\n" / "CMD:88\n" (reset/
 //      relance) et les rediffuse aux équipes via nRF24, exactement
 //      comme le faisait radioSendCmdToBuzzers() sur le Mega avant.
-//
-// Le son est géré directement par le logiciel PC (Node.js), donc
-// aucun relais vers un Nano-Son n'est nécessaire ici.
+//   3) Reçoit du Mega des ordres son "SON:<cmd>:<team>\n" et les
+//      retransmet en radio au nano son (pipe "adresseSon"), exactement
+//      comme le faisait envoyerSon() sur le Mega avant — nécessaire
+//      pour le mode sans PC (le logiciel PC, quand présent, joue le
+//      son de son côté à réception de BUZZ:/CMD_SENT:, indépendamment
+//      de ce relais radio).
 //
 // Câblage vers le Mega (Serial2) :
 //   Nano TX (D1)  -> Mega RX2 (pin 17)
@@ -31,6 +34,8 @@
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <string.h>
+#include <stdlib.h>
 
 #define LIEN_MEGA_BAUD 19200
 #define RADIO_PURGE_MAX 15
@@ -41,15 +46,26 @@ const byte adresseBuzzers[6]   = "00001";
 // Le Nano animateur émet désormais sur adresseBuzzers (voir plus bas) :
 // le pipe 2 séparé a été abandonné, test terrain a montré qu'il ne
 // s'active pas de façon fiable sur ce clone nRF24.
+const byte adresseSon[6]       = "00002"; // vers le nano son, cf. nano_son_final.ino
 
 #define RADIO_CHANNEL 108
 #define MAX_EQUIPES   30
 #define LED 13
 
+bool radioOK = false;
+
 struct RadioMsg {
     uint8_t kind;   // 1=BUZZ_EQUIPE, 2=CMD
     uint8_t value;
     uint16_t seq;
+};
+
+// Doit rester identique à la struct SonPayload de nano_son_final.ino
+// (même taille en octets, même ordre de champs).
+struct SonPayload {
+    uint16_t cmd;
+    uint8_t team;
+    uint8_t seq;
 };
 
 // ---- Anti-doublon buzz équipes ----
@@ -60,6 +76,18 @@ static uint16_t seqOutboundCmd = 0;
 // ---- Anti-doublon commandes animateur (kind==2) ----
 static uint16_t lastSeqCmd = 0;
 static bool lastSeqInitCmd = false;
+
+// ---- Envoi son vers le nano son, en rafale non bloquante (portée depuis
+// l'ancien megaf.ino : envoyerSon()/updateRadioSonAsynchrone()) ----
+static uint8_t sonSeqCounter = 0;
+bool sonEnvoiActif = false;
+SonPayload sonQueuePayload;
+uint8_t sonPhase = 0;
+uint8_t sonBurstIdx = 0;
+unsigned long sonProchainEnvoiMs = 0;
+uint8_t sonBurstN = 0;
+uint8_t sonGapMs = 0;
+uint8_t sonPauseMs = 0;
 
 // ---- Fenêtre de simultanéité 50ms (identique à l'ancienne logique Mega) ----
 #define FENETRE_MS 50
@@ -100,6 +128,62 @@ void radioSendCmdToBuzzers(uint8_t value) {
 }
 
 // =========================================================
+// ENVOI SON VERS LE NANO SON (pipe "adresseSon"), sans bloquer la
+// réception des buzz équipes — même logique de rafale que l'ancien
+// megaf.ino (4 copies espacées pour le buzz, 3 pour valider/refuser).
+// =========================================================
+void envoyerSon(uint16_t cmd, uint8_t team) {
+    if (!radioOK) return;
+
+    sonQueuePayload.cmd = cmd;
+    sonQueuePayload.team = team;
+    sonQueuePayload.seq = (uint8_t)(++sonSeqCounter);
+
+    sonBurstN   = (cmd == 200) ? 4 : 3;
+    sonGapMs    = (cmd == 200) ? 12 : 14;
+    sonPauseMs  = (cmd == 200) ? 42 : 36;
+
+    sonPhase = 0;
+    sonBurstIdx = 0;
+    sonEnvoiActif = true;
+    sonProchainEnvoiMs = millis();
+
+    radio.stopListening();
+    radio.flush_tx();
+    radio.openWritingPipe(adresseSon);
+    radio.setAutoAck(false);
+}
+
+void updateRadioSonAsynchrone() {
+    if (!sonEnvoiActif) return;
+
+    unsigned long now = millis();
+    if ((long)(now - sonProchainEnvoiMs) < 0) return;
+
+    for (uint8_t retry = 0; retry < 4; retry++) {
+        if (radio.write(&sonQueuePayload, sizeof(sonQueuePayload), true)) break;
+        delayMicroseconds(300);
+    }
+
+    sonBurstIdx++;
+    if (sonBurstIdx < sonBurstN) {
+        sonProchainEnvoiMs = now + sonGapMs;
+    } else {
+        if (sonPhase == 0) {
+            sonPhase = 1;
+            sonBurstIdx = 0;
+            sonProchainEnvoiMs = now + sonPauseMs;
+        } else {
+            // Fin de la rafale -> retour en écoute des buzzers
+            sonEnvoiActif = false;
+            radio.setAutoAck(true);
+            radio.openWritingPipe(adresseBuzzers);
+            radio.startListening();
+        }
+    }
+}
+
+// =========================================================
 // PARSING DES LIGNES REÇUES DU MEGA
 // =========================================================
 static int parse_int(const char *s) { return (int)strtol(s, NULL, 10); }
@@ -114,6 +198,16 @@ void parseLigneMega(const char *line) {
         int v = parse_int(line + 4);
         radioSendCmdToBuzzers((uint8_t)v);
     }
+    else if (starts_with(line, "SON:")) {
+        // Format attendu : SON:<cmd>:<team>  (ex. SON:200:8, SON:201:0, SON:202:0)
+        const char *p = line + 4;
+        int cmd = parse_int(p);
+        const char *colon = strchr(p, ':');
+        int team = colon ? parse_int(colon + 1) : 0;
+        if (team < 0) team = 0;
+        if (team > 255) team = 255;
+        envoyerSon((uint16_t)cmd, (uint8_t)team);
+    }
 }
 
 // =========================================================
@@ -124,11 +218,14 @@ void setup() {
     Serial.begin(LIEN_MEGA_BAUD); // liaison vers le Mega (partagée avec USB)
 
     if (radio.begin()) {
+        radioOK = true;
         radio.setChannel(RADIO_CHANNEL);
         radio.setAddressWidth(5);
         radio.setPALevel(RF24_PA_MAX);
         radio.setDataRate(RF24_250KBPS);
         radio.setCRCLength(RF24_CRC_16);
+        // RadioMsg et SonPayload font toutes deux 4 octets — même payloadSize
+        // valable pour l'écoute équipes/animateur et l'envoi vers le nano son.
         radio.setPayloadSize(sizeof(RadioMsg));
         radio.setAutoAck(true);
         radio.setRetries(10, 15);
@@ -136,6 +233,7 @@ void setup() {
         radio.startListening();
         Serial.println("DEBUG:RADIO_OK,pipes=1+2");
     } else {
+        radioOK = false;
         Serial.println("DEBUG:RADIO_INIT_FAILED");
     }
 
@@ -152,6 +250,7 @@ void setup() {
 // =========================================================
 void loop() {
     ledUpdate();
+    updateRadioSonAsynchrone(); // rafale son en arrière-plan, non bloquant
 
     // Fenêtre expirée : on décide qui a buzzé en premier
     if (fenetreActive && millis() - debutFenetre >= FENETRE_MS) {
@@ -186,8 +285,9 @@ void loop() {
     }
 
     // Réception radio : équipes (pipe 1, fenêtre 50ms) ou animateur (pipe 2, direct/fiable)
+    // Suspendue pendant une rafale son (radio en mode émission vers adresseSon).
     uint8_t pipeNum;
-    while (radio.available(&pipeNum)) {
+    while (!sonEnvoiActif && radio.available(&pipeNum)) {
         RadioMsg msg = {0, 0, 0};
         radio.read(&msg, sizeof(msg));
 

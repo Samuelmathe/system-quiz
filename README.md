@@ -7,7 +7,8 @@ Ce dossier contient :
 ## Contenu
 
 - **Arduino**
-  - `megaf.ino` : sketch pour Arduino MEGA (DMX + radio NRF24L01)
+  - `megaf.ino` : sketch pour Arduino MEGA (DMX + logique de jeu ; plus de radio directe, voir `rf_nano_bridge.ino`)
+  - `rf_nano_bridge.ino` : sketch pour **RF-Nano** (Nano + nRF24 intégrés) — pont radio nRF24 ↔ série vers le Mega ; seule carte du système avec un module radio
   - `buzzer_nano_equipe.ino` : sketch pour Arduino NANO (équipe)
   - `nano_son_final.ino` : sketch pour Arduino NANO (son)
   - `nano_animateur_final.ino` : sketch pour Arduino NANO (animateur)

@@ -1,8 +1,10 @@
 # Trois modes d’utilisation — scores & sons (Quiz Board)
 
-Ce document décrit les **trois configurations** possibles entre **Mega** (DMX + logique jeu + radio), **nano son** (DFPlayer + radio), et le **logiciel** `interface/interface_30eq.py` (scores, sons PC, port série).
+Ce document décrit les **trois configurations** possibles entre **Mega** (DMX + logique jeu, `megaf.ino`), **RF-Nano** (pont radio nRF24 ↔ série, `rf_nano_bridge.ino`), **nano son** (DFPlayer + radio), et le **logiciel** `interface/interface_30eq.py` (scores, sons PC, port série).
 
-**Règle matérielle** : le PC n’est branché en série qu’**à une seule carte à la fois** — soit la **Mega** (TTL / USB), soit le **nano son** (USB), **jamais les deux en même temps**. En mode 3, la Mega reste alimentée pour le DMX et la radio, mais **sans** câble série vers le PC ; tout passe par le nano son (USB).
+**Architecture radio (depuis la migration RF-Nano)** : le Mega n’a plus de module nRF24 branché directement (c’était la source d’un gel intermittent diagnostiqué en conditions réelles — connexion physique fragile vers la puce radio). Toute la réception nRF24 (équipes, animateur) et l’émission vers le nano son sont désormais assurées par une carte **RF-Nano** dédiée (Nano + nRF24 intégrés d’usine), reliée au Mega par une simple liaison série filaire (`Serial2`, 19200 bauds). Le Mega envoie/reçoit de simples lignes texte (`BUZZ:n`, `CMD:99`, `SON:200:n`…) au RF-Nano, qui traduit ça en paquets radio et inversement. Cette isolation protège la logique de jeu/DMX : même si le RF-Nano a un problème radio, le Mega continue de tourner.
+
+**Règle matérielle (PC)** : le PC n’est branché en série qu’**à une seule carte à la fois** — soit la **Mega** (TTL / USB), soit le **nano son** (USB), **jamais les deux en même temps**. En mode 3, la Mega reste alimentée pour le DMX et le pilotage du RF-Nano, mais **sans** câble série vers le PC ; tout passe par le nano son (USB).
 
 ---
 
@@ -18,7 +20,8 @@ Ce document décrit les **trois configurations** possibles entre **Mega** (DMX +
 
 ## Mode 1 — Sans ordinateur
 
-- La **Mega** gère buzzers, animateur, DMX et envoie les ordres **son** en radio vers le **nano son** (pipe `00002`, payload `200` / `201` / `202`).
+- La **Mega** gère la logique du jeu et le DMX ; elle reçoit les buzz/commandes animateur du **RF-Nano** par liaison série filaire, et lui envoie en retour les ordres **son** (`SON:200:n`, `SON:201:0`, `SON:202:0`) par la même liaison.
+- Le **RF-Nano** retransmet ces ordres son en radio vers le **nano son** (pipe `00002`, payload `200` / `201` / `202`) — exactement le même paquet qu’avant, seule l’origine a changé (RF-Nano au lieu de la Mega directement).
 - Le **nano son** joue les fichiers sur la **carte microSD** du DFPlayer (dossier `mp3/` sur la carte, ex. `0101.mp3` pour l’équipe 1, repli `0001.mp3`).
 - **Pas** de fichier `equipe_1.mp3` sur le PC : tout passe par la convention **DF** (`0101` … `0130`).
 
@@ -67,12 +70,19 @@ La Mega envoie toujours le **numéro d’équipe 1…30** dans le payload radio 
 
 ---
 
-## Fiabilité radio Mega ↔ nano son (nRF24L01)
+## Fiabilité radio RF-Nano ↔ nano son (nRF24L01)
 
 - **Même canal et adresse** : canal **108**, pipe **`00002`** pour les paquets `SonPayload`.
-- **Buzz (200)** : la Mega envoie **6 copies** espacées de **~14 ms** (~80 ms au total) avec un **numéro de séquence** (`seq`) ; le nano met les paquets en **file** et **dédoublonne** par `cmd`+`team`+`seq` (~450 ms). DFPlayer : lecture **immédiate** si la piste équipe a déjà réussi une fois (~30 ms), sinon test erreur **~100 ms** max.
-- **Victoire / échec (201 / 202)** : **4 copies** ~**18 ms** ; même dédoublonnage par `seq` (~350 ms).
+- **Buzz (200)** : le RF-Nano envoie une rafale de copies espacées de quelques ms (`envoyerSon()`/`updateRadioSonAsynchrone()` dans `rf_nano_bridge.ino`, portées depuis l’ancien `megaf.ino`) avec un **numéro de séquence** (`seq`) ; le nano met les paquets en **file** et **dédoublonne** par `cmd`+`team`+`seq`. DFPlayer : lecture **immédiate** si la piste équipe a déjà réussi une fois, sinon test erreur en fond.
+- **Victoire / échec (201 / 202)** : même principe de rafale + dédoublonnage par `seq`.
 - **Bonnes pratiques** : alimentation stable (condensateur près du nRF24), antennes correctes, distance raisonnable ; le **250 kbps** aide la portée.
+
+## Fiabilité liaison Mega ↔ RF-Nano (série filaire)
+
+- **`Serial2` sur la Mega (RX2=17, TX2=16)**, **19200 bauds**, GND commun obligatoire.
+- Protocole texte simple, une commande par ligne : `BUZZ:n`, `CMD:99`/`CMD:88`, `SON:cmd:team`.
+- Le RF-Nano dédoublonne aussi les commandes animateur par `seq` (évite qu’un accusé de réception radio perdu ne fasse rejouer plusieurs fois le son/flash pour un seul appui bouton).
+- **Attention en développement** : les broches D0/D1 du RF-Nano sont partagées avec l’USB — débrancher le fil vers la Mega pour reprogrammer/déboguer via USB.
 
 ---
 

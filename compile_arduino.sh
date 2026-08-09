@@ -17,7 +17,7 @@ else
   exit 1
 fi
 
-LIBS="$ROOT/build/libraries:$HOME/Arduino/libraries"
+LIBS="$ROOT/build/libraries,$HOME/Arduino/libraries"
 DMX="$ROOT/build/libraries/DMXSerial"
 if [[ ! -f "$DMX/library.properties" ]]; then
   mkdir -p "$DMX/src"
@@ -47,17 +47,19 @@ TARGET="${1:-all}"
 
 case "$TARGET" in
   mega)       compile_one megaf arduino:avr:mega ;;
+  rf-bridge)  compile_one rf_nano_bridge arduino:avr:nano:cpu=atmega328old ;;
   nano-son)   compile_one nano_son_final arduino:avr:nano:cpu=atmega328old ;;
   nano-eq)    compile_one buzzer_nano_equipe arduino:avr:nano:cpu=atmega328old ;;
   nano-anim)  compile_one nano_animateur_final arduino:avr:nano:cpu=atmega328old ;;
   all)
     compile_one megaf arduino:avr:mega
+    compile_one rf_nano_bridge arduino:avr:nano:cpu=atmega328old
     compile_one nano_son_final arduino:avr:nano:cpu=atmega328old
     compile_one buzzer_nano_equipe arduino:avr:nano:cpu=atmega328old
     compile_one nano_animateur_final arduino:avr:nano:cpu=atmega328old
     ;;
   *)
-    echo "Usage: $0 [all|mega|nano-son|nano-eq|nano-anim]" >&2
+    echo "Usage: $0 [all|mega|rf-bridge|nano-son|nano-eq|nano-anim]" >&2
     exit 1
     ;;
 esac

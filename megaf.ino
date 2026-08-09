@@ -258,7 +258,10 @@ void loop() {
 void actionResetAll() {
     envoyerCmdAuxEquipes(99);
     PC_SERIAL.println("CMD_SENT:RESET_ALL");
-    // Le son est déclenché par le logiciel PC lui-même à réception de "CMD_SENT:RESET_ALL"
+    // Mode sans PC : ordre son relayé au RF-Nano, qui le retransmet en radio
+    // au nano son (pipe "00002"). Si un PC est branché, ce message est
+    // simplement ignoré côté RF-Nano tant qu'aucun nano son n'est présent.
+    NANO_SERIAL.println("SON:201:0");
     flashDmxStartVert();
     ledPulse(150);
     for (int i = 0; i < 31; i++) dejaJoue[i] = false;
@@ -269,7 +272,8 @@ void actionResetAll() {
 void actionRelancePartiel() {
     envoyerCmdAuxEquipes(88);
     PC_SERIAL.println("CMD_SENT:RELANCE_PARTIEL");
-    // Le son est déclenché par le logiciel PC lui-même à réception de "CMD_SENT:RELANCE_PARTIEL"
+    // Mode sans PC : voir commentaire équivalent dans actionResetAll()
+    NANO_SERIAL.println("SON:202:0");
     flashDmxStartRouge();
     ledPulse(150);
     jeuVerrouille = false;
@@ -295,7 +299,8 @@ void parseLigneNano(const char *line) {
             dejaJoue[signal] = true;
             allumerCouleurEquipe(signal);
             PC_SERIAL.print("BUZZ:"); PC_SERIAL.println(signal);
-            // Le son est déclenché par le logiciel PC lui-même à réception de "BUZZ:n"
+            // Mode sans PC : voir commentaire équivalent dans actionResetAll()
+            NANO_SERIAL.print("SON:200:"); NANO_SERIAL.println(signal);
         } else {
             PC_SERIAL.print("IGNORED:locked="); PC_SERIAL.print(jeuVerrouille ? 1 : 0);
             PC_SERIAL.print(",team="); PC_SERIAL.println(signal);
