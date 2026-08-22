@@ -41,7 +41,9 @@ GAP_ALERT_SECONDS = 5.0   # aucune ligne reçue pendant ce délai -> alerte free
 POLL_MS = 100              # fréquence de traitement de la file d'attente (ms)
 BANNER_REFRESH_MS = 500    # fréquence de rafraîchissement du bandeau d'état (ms)
 
-ALIVE_RE = re.compile(r"ALIVE:(\d+),radioOK=(\d),locked=(\d)")
+# "ignored=" est optionnel (retro-compatible avec un ancien firmware qui ne
+# l'enverrait pas) : le groupe 4 peut etre None si absent.
+ALIVE_RE = re.compile(r"ALIVE:(\d+),radioOK=(\d),locked=(\d)(?:,ignored=(\d+))?")
 
 
 class QuizLoggerApp:
@@ -317,7 +319,12 @@ class QuizLoggerApp:
                 if self.dernier_radio_ok is True and radio_ok is False:
                     self.stat_nb_radio_down += 1
                 self.dernier_radio_ok = radio_ok
+
+                if m.group(4) is not None:
+                    self.stat_nb_ignored += int(m.group(4))
         elif ligne.startswith("IGNORED:"):
+            # Ancien firmware (avant le comptage silencieux cote Mega) :
+            # gardé en compatibilité si jamais reflashe avec une vieille version.
             tag = "ignored"
             self.stat_nb_ignored += 1
         elif ligne.startswith("BUZZ:") or ligne.startswith("BUZZ_EQUIPE:"):
