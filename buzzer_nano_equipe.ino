@@ -44,6 +44,35 @@ unsigned long lastChangeMs = 0;
 bool feedbackActif = false;
 unsigned long feedbackStartMs = 0;
 
+bool radioOK = false;
+
+// [FIX] Auto-reparation : si le module radio glitche en plein match (mauvais
+// contact, brownout transitoire...), on ne veut pas rester silencieusement
+// mort jusqu'a ce que quelqu'un remarque et rebranche le boitier. Apres
+// plusieurs echecs COMPLETS consecutifs (tous les essais/retries epuises),
+// on retente une reinitialisation complete du radio.
+#define ECHECS_CONSECUTIFS_AVANT_REINIT 5
+uint8_t echecsConsecutifs = 0;
+
+// =========================================================
+// (RE)INITIALISATION RADIO — factorisee pour pouvoir etre rappelee en
+// auto-reparation depuis loop().
+// =========================================================
+bool initRadio() {
+    if (!radio.begin()) return false;
+    radio.setChannel(RADIO_CHANNEL);
+    radio.setAddressWidth(5);
+    radio.openWritingPipe(adresse);
+    radio.setPALevel(RF24_PA_MAX);
+    radio.setDataRate(RF24_250KBPS);
+    radio.setCRCLength(RF24_CRC_16);
+    radio.setPayloadSize(sizeof(RadioMsg));
+    radio.setAutoAck(true);
+    radio.setRetries(10, 15); // 10 essais, 3750µs d'attente entre chaque
+    radio.stopListening();
+    return true;
+}
+
 // =========================================================
 // SETUP
 // =========================================================
@@ -62,20 +91,8 @@ void setup() {
     // Vérifie que A0 est bien inutilisée sur ton montage avant de garder cette ligne.
     randomSeed(analogRead(A0) + monEquipe);
 
-    if (radio.begin()) {
-        radio.setChannel(RADIO_CHANNEL);
-        radio.setAddressWidth(5);
-        radio.openWritingPipe(adresse);
-        radio.setPALevel(RF24_PA_MAX);
-        radio.setDataRate(RF24_250KBPS);
-        radio.setCRCLength(RF24_CRC_16);
-        radio.setPayloadSize(sizeof(RadioMsg));
-
-        // Fiabilité maximale
-        radio.setAutoAck(true);
-        radio.setRetries(10, 15); // 10 essais, 3750µs d'attente entre chaque
-        radio.stopListening();
-
+    radioOK = initRadio();
+    if (radioOK) {
         Serial.print("Buzzer Equipe ");
         Serial.print(monEquipe);
         Serial.println(" pret !");
@@ -90,6 +107,15 @@ void setup() {
 void loop() {
     wdt_reset(); // Reset du Watchdog à chaque tour
     unsigned long now = millis();
+
+    // Le radio n'a jamais demarre correctement (module absent au boot,
+    // faux contact...) : on retente periodiquement plutot que de rester
+    // mort jusqu'au prochain reboot.
+    static unsigned long prochainRetryRadioMs = 0;
+    if (!radioOK && (long)(now - prochainRetryRadioMs) >= 0) {
+        prochainRetryRadioMs = now + 2000;
+        radioOK = initRadio();
+    }
 
     // -----------------------------------------------------
     // GESTION NON-BLOQUANTE DU FEEDBACK (Vibreur / LED)
@@ -145,12 +171,19 @@ void loop() {
                 }
             }
 
-            // Log de debug
+            // Log de debug + auto-reparation si echecs repetes
             if (ok) {
+                echecsConsecutifs = 0;
                 Serial.print("Buzz envoye par l'equipe ");
                 Serial.println(monEquipe);
             } else {
                 Serial.println("Echec de la transmission radio (Ack non recu)");
+                if (echecsConsecutifs < 255) echecsConsecutifs++;
+                if (echecsConsecutifs >= ECHECS_CONSECUTIFS_AVANT_REINIT) {
+                    echecsConsecutifs = 0;
+                    Serial.println("Trop d'echecs consecutifs -> reinit radio");
+                    radioOK = initRadio();
+                }
             }
         }
     }

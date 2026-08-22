@@ -85,11 +85,13 @@ def load_config():
         "equipes": [{"couleurs": [[255, 255, 255]]}], 
         "groupes_dmx": [{"id": 1, "adresse": 1}],
         "dmx_universal": {
-            "nb_canaux": 8, 
-            "off_dim": 0, 
-            "off_r": 1, 
-            "off_g": 2, 
-            "off_b": 3
+            "nb_canaux": 8,
+            "off_dim": 0,
+            "off_r": 1,
+            "off_g": 2,
+            "off_b": 3,
+            "off_strobe": -1,   # -1 = pas de canal strobe (depend du projecteur)
+            "strobe_value": 200 # valeur qui declenche le strobe (depend du projecteur)
         }
     }
 
@@ -182,7 +184,8 @@ def remove_projector():
 def reset_total_config():
     config["groupes_dmx"] = [{"id": 1, "adresse": 1}]
     config["equipes"] = [{"couleurs": [[255, 255, 255]]}]
-    config["dmx_universal"] = {"nb_canaux": 8, "off_dim": 0, "off_r": 1, "off_g": 2, "off_b": 3}
+    config["dmx_universal"] = {"nb_canaux": 8, "off_dim": 0, "off_r": 1, "off_g": 2, "off_b": 3,
+                                "off_strobe": -1, "strobe_value": 200}
     save_config()
     refresh_ui_full()
     log("Configuration reinitialisee par defaut.", color=[255, 100, 100])
@@ -227,7 +230,8 @@ def envoyer_configuration_complete():
             total_steps = 2 + len(config["groupes_dmx"]) + (len(config["equipes"]) * len(config["groupes_dmx"]))
             current_step = 0
 
-            trame_patch = f"SET_PATCH:{u['nb_canaux']}:{u['off_dim']}:{u['off_r']}:{u['off_g']}:{u['off_b']}\n"
+            trame_patch = (f"SET_PATCH:{u['nb_canaux']}:{u['off_dim']}:{u['off_r']}:{u['off_g']}:{u['off_b']}:"
+                           f"{u['off_strobe']}:{u['strobe_value']}\n")
             ser.write(trame_patch.encode())
             current_step += 1
             schedule_progress_bar(current_step, total_steps)
@@ -397,6 +401,12 @@ def setup_ui():
                                      callback=lambda s,a: config["dmx_universal"].update({"off_g": a}))
                     dpg.add_input_int(label="Offset BLEU", default_value=config["dmx_universal"]["off_b"],
                                      callback=lambda s,a: config["dmx_universal"].update({"off_b": a}))
+                    dpg.add_input_int(label="Offset STROBE (-1 = aucun)", default_value=config["dmx_universal"]["off_strobe"],
+                                     callback=lambda s,a: config["dmx_universal"].update({"off_strobe": a}))
+                    dpg.add_input_int(label="Valeur STROBE (0-255)", default_value=config["dmx_universal"]["strobe_value"],
+                                     callback=lambda s,a: config["dmx_universal"].update({"strobe_value": a}))
+                    dpg.add_text("Strobe ~400ms a l'annonce du gagnant, puis couleur fixe.",
+                                 color=[150, 150, 150], wrap=420)
 
                 # --- PROJECTEURS ---
                 with dpg.collapsing_header(label="ADRESSES DMX", default_open=True):

@@ -36,9 +36,29 @@
 #include <RF24.h>
 #include <string.h>
 #include <stdlib.h>
+#include <avr/wdt.h>
 
 #define LIEN_MEGA_BAUD 19200
 #define RADIO_PURGE_MAX 15
+
+// [FIX] Le Serial.print de debug par paquet recu sature le lien 19200 bauds
+// des qu'on depasse quelques buzz/s (ex: stress test 7 equipes a 100-300ms
+// => ~35 msg/s, ~58% de bande passante rien que pour ce debug). Serial.print
+// est bloquant une fois le buffer TX plein, ce qui affame loop() et fait
+// deborder le FIFO radio (3 paquets max) -> Nano qui parait "fige" en rafale.
+// Mettre a 1 uniquement pour du debug ponctuel a faible charge.
+#define DEBUG_RX_VERBOSE 0
+
+// [DIAGNOSTIC] PA_MAX sur un banc de test ou plusieurs nRF24 sont a
+// quelques cm les uns des autres peut saturer/desensibiliser le
+// recepteur (interference de champ proche) et faire consommer un pic
+// de courant max a chaque emission -- suspect possible du figement dur
+// (watchdog inefficace = signature d'un vrai blocage materiel SPI/RF,
+// pas d'un simple ralentissement logiciel). A portee reelle (equipes a
+// plusieurs metres), PA_MAX est correct et necessaire : remettre
+// RF24_PA_MAX avant tout deploiement reel, ceci est un test de banc
+// uniquement.
+#define RADIO_PA_LEVEL RF24_PA_LOW
 
 RF24 radio(9, 10); // CE, CSN
 
@@ -211,31 +231,37 @@ void parseLigneMega(const char *line) {
 }
 
 // =========================================================
+// (RE)INITIALISATION RADIO — factorisee pour pouvoir etre rappelee en
+// auto-reparation depuis loop() (radio.begin() initial rate, ou puce
+// devenue muette detectee via isChipConnected()).
+// =========================================================
+bool initRadio() {
+    if (!radio.begin()) return false;
+    radio.setChannel(RADIO_CHANNEL);
+    radio.setAddressWidth(5);
+    radio.setPALevel(RADIO_PA_LEVEL);
+    radio.setDataRate(RF24_250KBPS);
+    radio.setCRCLength(RF24_CRC_16);
+    // RadioMsg et SonPayload font toutes deux 4 octets — même payloadSize
+    // valable pour l'écoute équipes/animateur et l'envoi vers le nano son.
+    radio.setPayloadSize(sizeof(RadioMsg));
+    radio.setAutoAck(true);
+    radio.setRetries(10, 15);
+    radio.openReadingPipe(1, adresseBuzzers);
+    radio.startListening();
+    return true;
+}
+
+// =========================================================
 // SETUP
 // =========================================================
 void setup() {
     pinMode(LED, OUTPUT);
     Serial.begin(LIEN_MEGA_BAUD); // liaison vers le Mega (partagée avec USB)
+    wdt_enable(WDTO_2S); // [FIX] auto-recuperation en cas de blocage (absent avant)
 
-    if (radio.begin()) {
-        radioOK = true;
-        radio.setChannel(RADIO_CHANNEL);
-        radio.setAddressWidth(5);
-        radio.setPALevel(RF24_PA_MAX);
-        radio.setDataRate(RF24_250KBPS);
-        radio.setCRCLength(RF24_CRC_16);
-        // RadioMsg et SonPayload font toutes deux 4 octets — même payloadSize
-        // valable pour l'écoute équipes/animateur et l'envoi vers le nano son.
-        radio.setPayloadSize(sizeof(RadioMsg));
-        radio.setAutoAck(true);
-        radio.setRetries(10, 15);
-        radio.openReadingPipe(1, adresseBuzzers);
-        radio.startListening();
-        Serial.println("DEBUG:RADIO_OK,pipes=1+2");
-    } else {
-        radioOK = false;
-        Serial.println("DEBUG:RADIO_INIT_FAILED");
-    }
+    radioOK = initRadio();
+    Serial.println(radioOK ? "DEBUG:RADIO_OK,pipes=1+2" : "DEBUG:RADIO_INIT_FAILED");
 
     RadioMsg poubelle;
     uint8_t safety = 0;
@@ -248,9 +274,36 @@ void setup() {
 // =========================================================
 // LOOP
 // =========================================================
+// [FIX] Heartbeat + auto-reparation, remonte au Mega via "STATUS:radioOK="
+// (relaye ensuite dans son propre ALIVE:). Detecte une puce nRF24 devenue
+// muette (isChipConnected() fait un aller-retour SPI reel, contrairement a
+// radioOK qui ne reflete que l'etat au demarrage) et tente un reinit complet
+// sans attendre un reset watchdog complet -- recuperation plus rapide pour
+// toute panne qui ne bloque pas litteralement le CPU en boucle infinie.
+unsigned long prochainStatusMs = 0;
+#define STATUS_PERIOD_MS 2000
+
+void updateStatusEtAutoReparation() {
+    unsigned long now = millis();
+    if ((long)(now - prochainStatusMs) < 0) return;
+    prochainStatusMs = now + STATUS_PERIOD_MS;
+
+    if (radioOK && !radio.isChipConnected()) {
+        radioOK = false; // puce devenue muette, on retente ci-dessous
+    }
+    if (!radioOK) {
+        radioOK = initRadio();
+    }
+
+    Serial.print("STATUS:radioOK=");
+    Serial.println(radioOK ? 1 : 0);
+}
+
 void loop() {
+    wdt_reset();
     ledUpdate();
     updateRadioSonAsynchrone(); // rafale son en arrière-plan, non bloquant
+    updateStatusEtAutoReparation();
 
     // Fenêtre expirée : on décide qui a buzzé en premier
     if (fenetreActive && millis() - debutFenetre >= FENETRE_MS) {
@@ -271,6 +324,7 @@ void loop() {
 
     // Lecture des ordres venant du Mega
     while (Serial.available() > 0) {
+        wdt_reset();
         char c = (char)Serial.read();
         if (c == '\r') continue;
         if (c == '\n') {
@@ -288,12 +342,15 @@ void loop() {
     // Suspendue pendant une rafale son (radio en mode émission vers adresseSon).
     uint8_t pipeNum;
     while (!sonEnvoiActif && radio.available(&pipeNum)) {
+        wdt_reset(); // defense en profondeur si une rafale tres dense s'etale sur un seul passage de loop()
         RadioMsg msg = {0, 0, 0};
         radio.read(&msg, sizeof(msg));
 
+#if DEBUG_RX_VERBOSE
         Serial.print("DEBUG:RX pipe="); Serial.print(pipeNum);
         Serial.print(" kind="); Serial.print(msg.kind);
         Serial.print(" value="); Serial.println(msg.value);
+#endif
 
         // On route désormais sur le champ "kind" du message, pas sur le
         // numéro de pipe : sur certains nRF24 (clones notamment), la

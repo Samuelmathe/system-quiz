@@ -19,7 +19,12 @@ void getMcusrEtStopperWdt(void) {
 // CONFIGURATION MATÉRIELLE
 // =========================================================
 #define LED 13
-#define MAGIC_NUMBER 0xAB
+// [FIX] Bump 0xAB -> 0xAC : la struct QuizConfig grandit (offStrobe,
+// strobeValue). Sans ce bump, une EEPROM deja ecrite par l'ancienne
+// version serait relue telle quelle -- les nouveaux champs liraient des
+// octets EEPROM jamais initialises (valeurs aleatoires) au lieu de
+// declencher initialiserConfigParDefaut().
+#define MAGIC_NUMBER 0xAC
 #define PC_SERIAL  Serial3   // liaison vers le PC (logiciel Node.js)
 #define NANO_SERIAL Serial2  // liaison vers le RF-Nano (RX2=17, TX2=16)
 #define NANO_BAUD 19200
@@ -32,6 +37,8 @@ struct QuizConfig {
     int nbEquipes;
     int nbCanaux;
     int offDim, offR, offG, offB;
+    int offStrobe;      // -1 = pas de canal strobe sur ce projecteur
+    byte strobeValue;   // valeur qui declenche le strobe (depend du projecteur)
     int adressesDMX[30];
     byte couleurs[30][30][3];
 } settings;
@@ -44,6 +51,19 @@ bool dejaJoue[31]          = {false};
 int dernierSignal          = -1;
 unsigned long dernierSignalTemps = 0;
 unsigned long dernierAliveMs = 0;
+
+// [FIX] Etat radio du pont RF-Nano, remonte via "STATUS:radioOK=" (voir
+// parseLigneNano). Remplace l'ancien champ radioOK= du Mega d'avant le
+// pont, que quiz_logger-3.py/quiz_logger.py attendaient toujours dans
+// ALIVE: sans jamais le recevoir -> detection de redemarrage Mega
+// silencieusement cassee depuis la migration vers le pont.
+bool bridgeRadioOK = false;
+
+// [FIX] Nombre de buzz ignores depuis le dernier ALIVE:, compte en
+// silence au lieu d'un PC_SERIAL.print() par evenement (qui saturait
+// Serial3 a 9600 bauds sous forte charge et pouvait, dans le pire cas,
+// retarder wdt_reset() au-dela des 4s du watchdog).
+uint16_t nbIgnoresDepuisAlive = 0;
 
 // ---- LED non-bloquante ----
 unsigned long ledPulseUntil = 0;
@@ -66,12 +86,14 @@ uint8_t serialLen = 0;
 char nanoBuf[SERIAL_BUF_LEN];
 uint8_t nanoLen = 0;
 
-void setProjecteur(int addr, int r, int g, int b);
+void setProjecteur(int addr, int r, int g, int b, byte strobe);
 void eteindreLumieres();
 void flashDmxUpdate();
 void flashDmxStartVert();
 void flashDmxStartRouge();
 void allumerCouleurEquipe(int equipe);
+void declencherEffetGagnant(int equipe);
+void updateWinEffect();
 void parseCommande(const char *line);
 void parseLigneNano(const char *line);
 
@@ -87,6 +109,18 @@ void flashDmxStartRouge() { flashDmxMode = 2; flashDmxStep = 0; flashDmxNextMs =
 
 void flashDmxUpdate() {
     if (flashDmxMode == 0) return;
+
+    // [FIX] Si une equipe a gagne PENDANT l'animation (bouton valider ->
+    // clignotement vert de ~900ms), on doit arreter net sans toucher au
+    // DMX : sinon la prochaine etape planifiee de l'animation ecrase la
+    // couleur de l'equipe gagnante quelques centaines de ms plus tard
+    // (visible en rafale : l'equipe s'allume un instant puis s'eteint).
+    if (jeuVerrouille) {
+        flashDmxMode = 0;
+        flashDmxStep = 0;
+        return;
+    }
+
     unsigned long now = millis();
     if ((long)(now - flashDmxNextMs) < 0) return;
 
@@ -96,8 +130,8 @@ void flashDmxUpdate() {
         for (int p = 0; p < 30; p++) {
             int addr = settings.adressesDMX[p];
             if (addr > 0 && addr <= 512) {
-                if (vert) setProjecteur(addr, 0, 255, 0);
-                else       setProjecteur(addr, 255, 0, 0);
+                if (vert) setProjecteur(addr, 0, 255, 0, 0);
+                else       setProjecteur(addr, 255, 0, 0, 0);
             }
         }
     } else {
@@ -121,6 +155,8 @@ void initialiserConfigParDefaut() {
     settings.offR      = 1;
     settings.offG      = 2;
     settings.offB      = 3;
+    settings.offStrobe = -1;  // desactive tant que non configure
+    settings.strobeValue = 0;
 
     settings.adressesDMX[0] = 51;
     settings.adressesDMX[1] = 59;
@@ -196,6 +232,7 @@ void loop() {
 
     ledUpdate();
     flashDmxUpdate();
+    updateWinEffect();
 
     // BATTEMENT LED (Non-bloquant) — vivant tant que la loop tourne
     static unsigned long dernierBattement = 0;
@@ -204,11 +241,17 @@ void loop() {
         dernierBattement = millis();
     }
 
-    // Journal de vie périodique
+    // Journal de vie périodique — format complet attendu par
+    // quiz_logger(-3).py (radioOK= manquait depuis le passage au pont).
+    // "ignored=" porte le compte des buzz ignores depuis le dernier
+    // ALIVE, a la place d'un print par evenement.
     if (millis() - dernierAliveMs > 2000) {
         dernierAliveMs = millis();
         PC_SERIAL.print("ALIVE:"); PC_SERIAL.print(millis());
-        PC_SERIAL.print(",locked="); PC_SERIAL.println(jeuVerrouille ? 1 : 0);
+        PC_SERIAL.print(",radioOK="); PC_SERIAL.print(bridgeRadioOK ? 1 : 0);
+        PC_SERIAL.print(",locked="); PC_SERIAL.print(jeuVerrouille ? 1 : 0);
+        PC_SERIAL.print(",ignored="); PC_SERIAL.println(nbIgnoresDepuisAlive);
+        nbIgnoresDepuisAlive = 0;
     }
 
     // Reset anti-doublon après 1 seconde
@@ -217,7 +260,12 @@ void loop() {
     }
 
     // RÉCEPTION série PC
+    // [FIX] wdt_reset() a chaque caractere : si un gros paquet de lignes
+    // arrive d'un coup, cette boucle peut a elle seule durer plusieurs
+    // secondes dans une meme iteration de loop() -- sans reset ici, ca
+    // peut depasser les 4s du watchdog et provoquer un vrai reboot.
     while (PC_SERIAL.available() > 0) {
+        wdt_reset();
         char c = (char)PC_SERIAL.read();
         if (c == '\r') continue;
         if (c == '\n') {
@@ -237,7 +285,10 @@ void loop() {
     }
 
     // RÉCEPTION série NANO (buzz déjà résolus, un seul gagnant par message)
+    // [FIX] même raison que la boucle PC_SERIAL ci-dessus : sous rafale
+    // (stress test), le pont peut envoyer beaucoup de lignes d'un coup.
     while (NANO_SERIAL.available() > 0) {
+        wdt_reset();
         char c = (char)NANO_SERIAL.read();
         if (c == '\r') continue;
         if (c == '\n') {
@@ -297,13 +348,12 @@ void parseLigneNano(const char *line) {
         if (signal >= 1 && signal <= settings.nbEquipes && !dejaJoue[signal] && !jeuVerrouille) {
             jeuVerrouille = true;
             dejaJoue[signal] = true;
-            allumerCouleurEquipe(signal);
+            declencherEffetGagnant(signal);
             PC_SERIAL.print("BUZZ:"); PC_SERIAL.println(signal);
             // Mode sans PC : voir commentaire équivalent dans actionResetAll()
             NANO_SERIAL.print("SON:200:"); NANO_SERIAL.println(signal);
         } else {
-            PC_SERIAL.print("IGNORED:locked="); PC_SERIAL.print(jeuVerrouille ? 1 : 0);
-            PC_SERIAL.print(",team="); PC_SERIAL.println(signal);
+            if (nbIgnoresDepuisAlive < 0xFFFF) nbIgnoresDepuisAlive++;
         }
     }
     else if (line[0] == 'C' && line[1] == 'M' && line[2] == 'D' && line[3] == ':') {
@@ -311,6 +361,10 @@ void parseLigneNano(const char *line) {
         int v = (int)strtol(line + 4, NULL, 10);
         if (v == 99) actionResetAll();
         else if (v == 88) actionRelancePartiel();
+    }
+    else if (strncmp(line, "STATUS:radioOK=", 15) == 0) {
+        // heartbeat du pont RF-Nano, relaye dans ALIVE:
+        bridgeRadioOK = (line[15] == '1');
     }
 }
 
@@ -356,8 +410,12 @@ void parseCommande(const char *line) {
         actionRelancePartiel();
     }
     else if (starts_with(line, "SET_PATCH:")) {
-        int vals[5] = {0};
-        uint8_t n = parse_colon_ints(line + 9, vals, 5);
+        // offStrobe/strobeValue (index 5/6) sont optionnels : retro-compat
+        // avec un logiciel de config pas encore mis a jour qui n'enverrait
+        // que les 5 premiers champs (n==5) -> le canal strobe reste alors
+        // tel qu'il etait deja configure, au lieu d'etre efface.
+        int vals[7] = {0};
+        uint8_t n = parse_colon_ints(line + 9, vals, 7);
         if (n >= 5) {
             int nbCanauxTmp = constrain(vals[0], 1, 30);
             settings.nbCanaux = nbCanauxTmp;
@@ -365,6 +423,10 @@ void parseCommande(const char *line) {
             settings.offR     = constrain(vals[2], 0, nbCanauxTmp - 1);
             settings.offG     = constrain(vals[3], 0, nbCanauxTmp - 1);
             settings.offB     = constrain(vals[4], 0, nbCanauxTmp - 1);
+            if (n >= 7) {
+                settings.offStrobe   = constrain(vals[5], -1, nbCanauxTmp - 1);
+                settings.strobeValue = (byte)constrain(vals[6], 0, 255);
+            }
             PC_SERIAL.println("CONF:PATCH_OK");
         } else {
             PC_SERIAL.println("ERR:PATCH_INCOMPLETE");
@@ -428,12 +490,13 @@ void parseCommande(const char *line) {
 // =========================================================
 // LUMIÈRES DMX
 // =========================================================
-void setProjecteur(int addr, int r, int g, int b) {
+void setProjecteur(int addr, int r, int g, int b, byte strobe) {
     int maxC = constrain(settings.nbCanaux, 1, 30);
     if (settings.offDim >= 0 && settings.offDim < maxC) DMXSerial.write(addr + settings.offDim, 255);
     if (settings.offR   >= 0 && settings.offR   < maxC) DMXSerial.write(addr + settings.offR,   r);
     if (settings.offG   >= 0 && settings.offG   < maxC) DMXSerial.write(addr + settings.offG,   g);
     if (settings.offB   >= 0 && settings.offB   < maxC) DMXSerial.write(addr + settings.offB,   b);
+    if (settings.offStrobe >= 0 && settings.offStrobe < maxC) DMXSerial.write(addr + settings.offStrobe, strobe);
 }
 
 void eteindreLumieres() {
@@ -447,6 +510,9 @@ void eteindreLumieres() {
     }
 }
 
+// Affichage FIXE (sans strobe) de la couleur d'une equipe — etat final,
+// utilise directement (validation manuelle) ou via updateWinEffect() une
+// fois le strobe d'annonce termine.
 void allumerCouleurEquipe(int equipe) {
     eteindreLumieres();
     int idxEq = equipe - 1;
@@ -457,8 +523,66 @@ void allumerCouleurEquipe(int equipe) {
             setProjecteur(addr,
                 settings.couleurs[idxEq][p][0],
                 settings.couleurs[idxEq][p][1],
-                settings.couleurs[idxEq][p][2]
+                settings.couleurs[idxEq][p][2],
+                0
             );
         }
     }
+}
+
+// =========================================================
+// EFFET D'ANNONCE DU GAGNANT : strobe bref (WIN_STROBE_DURATION_MS) sur
+// la couleur de l'equipe, puis affichage fixe. Non-bloquant (comme
+// flashDmxUpdate) : declencherEffetGagnant() ecrit l'etat initial tout
+// de suite, updateWinEffect() bascule vers l'etat fixe une fois le delai
+// ecoule. Desactive automatiquement (offStrobe == -1, non configure) :
+// se comporte alors comme un allumerCouleurEquipe() direct.
+// =========================================================
+#define WIN_STROBE_DURATION_MS 400
+bool winEffectActive = false;
+int winEffectSignal = -1;
+unsigned long winEffectStartMs = 0;
+
+void declencherEffetGagnant(int equipe) {
+    if (settings.offStrobe < 0) {
+        // Pas de canal strobe configure sur ce projecteur -> affichage direct.
+        allumerCouleurEquipe(equipe);
+        return;
+    }
+
+    eteindreLumieres();
+    int idxEq = equipe - 1;
+    if (idxEq < 0 || idxEq >= 30) return;
+    for (int p = 0; p < 30; p++) {
+        int addr = settings.adressesDMX[p];
+        if (addr > 0 && addr <= 512) {
+            setProjecteur(addr,
+                settings.couleurs[idxEq][p][0],
+                settings.couleurs[idxEq][p][1],
+                settings.couleurs[idxEq][p][2],
+                settings.strobeValue
+            );
+        }
+    }
+    winEffectActive = true;
+    winEffectSignal = equipe;
+    winEffectStartMs = millis();
+}
+
+void updateWinEffect() {
+    if (!winEffectActive) return;
+
+    // [FIX] meme logique defensive que flashDmxUpdate() : si le jeu a ete
+    // deverrouille entre-temps (reset/relance), on annule sans toucher au
+    // DMX plutot que d'ecraser l'animation de reset avec un affichage fixe
+    // perime.
+    if (!jeuVerrouille) {
+        winEffectActive = false;
+        return;
+    }
+
+    if ((long)(millis() - winEffectStartMs) < WIN_STROBE_DURATION_MS) return;
+
+    winEffectActive = false;
+    allumerCouleurEquipe(winEffectSignal); // bascule strobe -> fixe
 }
