@@ -9,7 +9,7 @@
 RF24 radio(9, 10); // CE sur 9, CSN sur 10
 const byte adresse[6] = "00001";
 const int boutonPin  = 2;
-const int moteurPin  = 3; // Vibreur
+const int moteurPin  = 5; // Vibreur — cable sur D5 par le concepteur du boitier
 
 #define RADIO_CHANNEL  108
 

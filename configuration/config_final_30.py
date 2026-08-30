@@ -79,20 +79,26 @@ def log(message, color=[255, 255, 255]):
         dpg.add_text(f"[{timestamp}] {message}", parent="log_list", color=color)
         dpg.set_y_scroll("log_child", dpg.get_y_scroll_max("log_child") + 50)
 
+# Profil de canaux par defaut pour un nouveau projecteur -- chaque
+# projecteur garde desormais son PROPRE reglage (voir migration ci-dessous),
+# ce qui permet de melanger des modeles differents (projecteur RGB simple,
+# lyre utilisee juste pour sa couleur, etc.) sans jamais toucher au code.
+FIXTURE_PROFILE_DEFAULTS = {
+    "nb_canaux": 8,
+    "off_dim": 0,
+    "off_r": 1,
+    "off_g": 2,
+    "off_b": 3,
+    "off_strobe": -1,    # -1 = pas de canal strobe (depend du projecteur)
+    "strobe_value": 200, # valeur qui declenche le strobe (depend du projecteur)
+}
+
+
 def load_config():
     """Charge la configuration et assure la compatibilité des données."""
     default_structure = {
-        "equipes": [{"couleurs": [[255, 255, 255]]}], 
-        "groupes_dmx": [{"id": 1, "adresse": 1}],
-        "dmx_universal": {
-            "nb_canaux": 8,
-            "off_dim": 0,
-            "off_r": 1,
-            "off_g": 2,
-            "off_b": 3,
-            "off_strobe": -1,   # -1 = pas de canal strobe (depend du projecteur)
-            "strobe_value": 200 # valeur qui declenche le strobe (depend du projecteur)
-        }
+        "equipes": [{"couleurs": [[255, 255, 255]]}],
+        "groupes_dmx": [{"id": 1, "adresse": 1, **FIXTURE_PROFILE_DEFAULTS}],
     }
 
     try:
@@ -115,12 +121,23 @@ def load_config():
     if "equipes" not in data or not isinstance(data["equipes"], list) or not data["equipes"]:
         data["equipes"] = copy.deepcopy(default_structure["equipes"])
 
-    du = data.get("dmx_universal")
-    if not isinstance(du, dict):
-        data["dmx_universal"] = copy.deepcopy(default_structure["dmx_universal"])
-    else:
-        for k, v in default_structure["dmx_universal"].items():
-            du.setdefault(k, v)
+    # Migration : une ancienne config avait un seul reglage "dmx_universal"
+    # partage par tous les projecteurs -- on l'utilise comme valeur de
+    # depart pour chaque projecteur plutot que le defaut generique, pour
+    # ne rien perdre des reglages deja en place.
+    ancien_universel = data.get("dmx_universal")
+    valeurs_depart = FIXTURE_PROFILE_DEFAULTS
+    if isinstance(ancien_universel, dict):
+        valeurs_depart = {**FIXTURE_PROFILE_DEFAULTS, **{
+            k: ancien_universel[k] for k in FIXTURE_PROFILE_DEFAULTS if k in ancien_universel
+        }}
+    data.pop("dmx_universal", None)
+
+    for grp in data["groupes_dmx"]:
+        if not isinstance(grp, dict):
+            continue
+        for k, v in valeurs_depart.items():
+            grp.setdefault(k, v)
 
     for eq in data["equipes"]:
         if not isinstance(eq, dict):
@@ -129,6 +146,10 @@ def load_config():
             eq["couleurs"] = [[255, 255, 255] for _ in data["groupes_dmx"]]
         while len(eq["couleurs"]) < len(data["groupes_dmx"]):
             eq["couleurs"].append([255, 255, 255])
+        # Duree du strobe a l'annonce du gagnant, PAR EQUIPE : 0 = aucun,
+        # -1 = continu, >0 = duree en ms. Absent par defaut (pas de strobe)
+        # tant que l'operateur ne l'active pas explicitement pour l'equipe.
+        eq.setdefault("strobe_duree_ms", 0)
 
     return data
 
@@ -140,28 +161,37 @@ def save_config():
 
 # --- LOGIQUE DMX ---
 def auto_adressage():
+    """Recalcule les adresses en chainant chaque projecteur selon SON
+    propre nombre de canaux -- fonctionne meme avec des projecteurs de
+    modeles differents (ex: un simple RGB a 8 canaux suivi d'une lyre a
+    16 canaux avancera correctement de 16, pas d'un pas unique partage)."""
     if not config["groupes_dmx"]: return
-    pas = config["dmx_universal"]["nb_canaux"]
     addr = config["groupes_dmx"][0]["adresse"]
-    for i in range(len(config["groupes_dmx"])):
-        config["groupes_dmx"][i]["adresse"] = addr
-        addr += pas
+    for grp in config["groupes_dmx"]:
+        grp["adresse"] = addr
+        addr += grp.get("nb_canaux", FIXTURE_PROFILE_DEFAULTS["nb_canaux"])
     save_config()
     refresh_ui_full()
-    log(f"Adressage auto genere (Pas de {pas}).", color=[0, 255, 255])
+    log("Adressage auto genere (chaine selon les canaux de chaque projecteur).", color=[0, 255, 255])
 
 # ========== FONCTIONS AJOUT/SUPPRESSION PROJECTEURS ==========
 def add_projector():
-    """Ajoute un nouveau projecteur. MAX 30."""
+    """Ajoute un nouveau projecteur. MAX 30. Reprend le profil de canaux
+    du dernier projecteur existant comme point de depart (souvent le
+    meme modele que celui d'a cote), plutot que le defaut generique."""
     if len(config["groupes_dmx"]) >= 30:
         log("Maximum 30 projecteurs !", color=[255, 50, 50])
         return
     new_id = len(config["groupes_dmx"]) + 1
-    config["groupes_dmx"].append({"id": new_id, "adresse": 1})
-    
+    profil_depart = FIXTURE_PROFILE_DEFAULTS
+    if config["groupes_dmx"]:
+        dernier = config["groupes_dmx"][-1]
+        profil_depart = {k: dernier.get(k, v) for k, v in FIXTURE_PROFILE_DEFAULTS.items()}
+    config["groupes_dmx"].append({"id": new_id, "adresse": 1, **profil_depart})
+
     for eq in config["equipes"]:
         eq["couleurs"].append([255, 255, 255])
-    
+
     save_config()
     refresh_ui_full()
     log(f"Projecteur {new_id} ajoute", color=[0, 255, 0])
@@ -182,10 +212,8 @@ def remove_projector():
         log("Impossible de supprimer le dernier projecteur", color=[255, 100, 0])
 
 def reset_total_config():
-    config["groupes_dmx"] = [{"id": 1, "adresse": 1}]
+    config["groupes_dmx"] = [{"id": 1, "adresse": 1, **FIXTURE_PROFILE_DEFAULTS}]
     config["equipes"] = [{"couleurs": [[255, 255, 255]]}]
-    config["dmx_universal"] = {"nb_canaux": 8, "off_dim": 0, "off_r": 1, "off_g": 2, "off_b": 3,
-                                "off_strobe": -1, "strobe_value": 200}
     save_config()
     refresh_ui_full()
     log("Configuration reinitialisee par defaut.", color=[255, 100, 100])
@@ -201,11 +229,9 @@ def envoyer_configuration_complete():
         log("ERREUR : Arduino non connecte !", color=[255, 50, 50])
         return
 
-    u = config["dmx_universal"]
-    nb_canaux = u["nb_canaux"]
-    
     for i, grp in enumerate(config["groupes_dmx"]):
         adr = grp["adresse"]
+        nb_canaux = grp.get("nb_canaux", FIXTURE_PROFILE_DEFAULTS["nb_canaux"])
         if adr < 1 or adr > 512:
             log(f"Erreur Proj {i+1} : Adresse {adr} invalide", color=[255, 0, 0])
             return
@@ -227,15 +253,22 @@ def envoyer_configuration_complete():
             ser.reset_input_buffer()
             time.sleep(0.2)
 
-            total_steps = 2 + len(config["groupes_dmx"]) + (len(config["equipes"]) * len(config["groupes_dmx"]))
+            # +1 palier de progression par projecteur, un SET_PATCH est
+            # desormais envoye individuellement pour chacun (profil propre).
+            # +1 palier par equipe pour SET_STROBE_EQ, en plus des patchs
+            # par projecteur, des adresses, et des couleurs par equipe/projecteur.
+            total_steps = (1 + len(config["groupes_dmx"]) + len(config["groupes_dmx"])
+                           + (len(config["equipes"]) * len(config["groupes_dmx"]))
+                           + len(config["equipes"]))
             current_step = 0
 
-            trame_patch = (f"SET_PATCH:{u['nb_canaux']}:{u['off_dim']}:{u['off_r']}:{u['off_g']}:{u['off_b']}:"
-                           f"{u['off_strobe']}:{u['strobe_value']}\n")
-            ser.write(trame_patch.encode())
-            current_step += 1
-            schedule_progress_bar(current_step, total_steps)
-            time.sleep(0.1)
+            for i, grp in enumerate(config["groupes_dmx"]):
+                trame_patch = (f"SET_PATCH:{i}:{grp['nb_canaux']}:{grp['off_dim']}:{grp['off_r']}:{grp['off_g']}:"
+                               f"{grp['off_b']}:{grp['off_strobe']}:{grp['strobe_value']}\n")
+                ser.write(trame_patch.encode())
+                current_step += 1
+                schedule_progress_bar(current_step, total_steps)
+                time.sleep(0.08)
 
             ser.write(f"SET_NB_EQ:{len(config['equipes'])}\n".encode())
             current_step += 1
@@ -256,6 +289,12 @@ def envoyer_configuration_complete():
                     current_step += 1
                     schedule_progress_bar(current_step, total_steps)
                     time.sleep(0.05)
+
+                duree = eq.get("strobe_duree_ms", 0)
+                ser.write(f"SET_STROBE_EQ:{e_idx+1}:{duree}\n".encode())
+                current_step += 1
+                schedule_progress_bar(current_step, total_steps)
+                time.sleep(0.05)
 
             ser.write(b"SAVE_CONFIG\n")
             schedule_ui(lambda: log("MEGA SYNCHRONISE !", color=[0, 255, 127]))
@@ -347,10 +386,21 @@ def build_equipe_section():
                             input_mode=dpg.mvColorEdit_uint8,
                             callback=color_callback, user_data=(g_idx, i)
                         )
-        
+
+                def strobe_duree_callback(sender, app_data, user_data=i):
+                    config["equipes"][user_data]["strobe_duree_ms"] = app_data
+                    save_config()
+
+                dpg.add_input_int(
+                    label="Strobe (0=aucun, -1=continu, ms sinon)",
+                    default_value=eq.get("strobe_duree_ms", 0),
+                    min_value=-1, min_clamped=True, width=140,
+                    callback=strobe_duree_callback,
+                )
+
         with dpg.group(horizontal=True):
             dpg.add_button(label="+ EQUIPE", width=120, callback=lambda: [
-                config["equipes"].append({"couleurs": [[255,255,255] for _ in config["groupes_dmx"]]}) if len(config["equipes"]) < 30 else log("Maximum 30 equipes !", color=[255,50,50]),
+                config["equipes"].append({"couleurs": [[255,255,255] for _ in config["groupes_dmx"]], "strobe_duree_ms": 0}) if len(config["equipes"]) < 30 else log("Maximum 30 equipes !", color=[255,50,50]),
                 save_config(),
                 refresh_ui_full()
             ])
@@ -388,43 +438,64 @@ def setup_ui():
             with dpg.child_window(width=460, border=True):
                 dpg.add_text("CONFIGURATION SYSTEME", color=[0, 180, 255])
                 
-                # --- PATCH UNIVERSEL ---
-                with dpg.collapsing_header(label="PATCH DMX (UNIVERSEL)", default_open=False):
-                    dpg.add_input_int(label="Canaux / Machine", default_value=config["dmx_universal"]["nb_canaux"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"nb_canaux": a}))
-                    dpg.add_text("Offsets des canaux :", color=[150, 150, 150])
-                    dpg.add_input_int(label="Offset DIMMER", default_value=config["dmx_universal"]["off_dim"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"off_dim": a}))
-                    dpg.add_input_int(label="Offset ROUGE", default_value=config["dmx_universal"]["off_r"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"off_r": a}))
-                    dpg.add_input_int(label="Offset VERT", default_value=config["dmx_universal"]["off_g"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"off_g": a}))
-                    dpg.add_input_int(label="Offset BLEU", default_value=config["dmx_universal"]["off_b"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"off_b": a}))
-                    dpg.add_input_int(label="Offset STROBE (-1 = aucun)", default_value=config["dmx_universal"]["off_strobe"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"off_strobe": a}))
-                    dpg.add_input_int(label="Valeur STROBE (0-255)", default_value=config["dmx_universal"]["strobe_value"],
-                                     callback=lambda s,a: config["dmx_universal"].update({"strobe_value": a}))
-                    dpg.add_text("Strobe ~400ms a l'annonce du gagnant, puis couleur fixe.",
-                                 color=[150, 150, 150], wrap=420)
-
                 # --- PROJECTEURS ---
-                with dpg.collapsing_header(label="ADRESSES DMX", default_open=True):
-                    dpg.add_button(label="CALCULER AUTO (Selon Canaux/Machine)", callback=auto_adressage, width=-1)
-                    
+                # Chaque projecteur a desormais son PROPRE profil de canaux
+                # (nombre de canaux, offsets couleur/strobe) au lieu d'un
+                # reglage unique impose a tous -- permet de melanger des
+                # modeles differents (ex: un simple RGB a cote d'une lyre
+                # utilisee juste pour sa couleur) sans toucher au code.
+                with dpg.collapsing_header(label="PROJECTEURS (adresse + profil de canaux)", default_open=True):
+                    dpg.add_button(label="CALCULER ADRESSES AUTO (chaine selon les canaux de chacun)",
+                                   callback=auto_adressage, width=-1)
+                    dpg.add_spacer(height=6)
+
                     for i, grp in enumerate(config["groupes_dmx"]):
-                        dpg.add_input_int(
-                            label=f"Proj {i+1}", 
-                            default_value=grp["adresse"], 
-                            width=110,
-                            min_value=1,
-                            max_value=512,
-                            min_clamped=True,
-                            max_clamped=True,
-                            callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"adresse": a}), 
-                            user_data=i
-                        )
-                    
+                        with dpg.collapsing_header(label=f"Projecteur {i+1}", default_open=False):
+                            dpg.add_input_int(
+                                label="Adresse DMX", default_value=grp["adresse"],
+                                width=110, min_value=1, max_value=512,
+                                min_clamped=True, max_clamped=True,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"adresse": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Nombre de canaux", default_value=grp.get("nb_canaux", FIXTURE_PROFILE_DEFAULTS["nb_canaux"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"nb_canaux": a}),
+                            )
+                            dpg.add_text("Offsets des canaux (0 = premier canal du projecteur) :", color=[150, 150, 150])
+                            dpg.add_input_int(
+                                label="Offset DIMMER", default_value=grp.get("off_dim", FIXTURE_PROFILE_DEFAULTS["off_dim"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_dim": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Offset ROUGE", default_value=grp.get("off_r", FIXTURE_PROFILE_DEFAULTS["off_r"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_r": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Offset VERT", default_value=grp.get("off_g", FIXTURE_PROFILE_DEFAULTS["off_g"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_g": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Offset BLEU", default_value=grp.get("off_b", FIXTURE_PROFILE_DEFAULTS["off_b"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_b": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Offset STROBE (-1 = aucun)", default_value=grp.get("off_strobe", FIXTURE_PROFILE_DEFAULTS["off_strobe"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_strobe": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Valeur STROBE (0-255)", default_value=grp.get("strobe_value", FIXTURE_PROFILE_DEFAULTS["strobe_value"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"strobe_value": a}),
+                            )
+                            dpg.add_text("Strobe ~400ms a l'annonce du gagnant, puis couleur fixe.",
+                                         color=[150, 150, 150], wrap=420)
+
                     dpg.add_spacer(height=5)
                     with dpg.group(horizontal=True):
                         dpg.add_button(

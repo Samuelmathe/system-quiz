@@ -19,12 +19,11 @@ void getMcusrEtStopperWdt(void) {
 // CONFIGURATION MATÉRIELLE
 // =========================================================
 #define LED 13
-// [FIX] Bump 0xAB -> 0xAC : la struct QuizConfig grandit (offStrobe,
-// strobeValue). Sans ce bump, une EEPROM deja ecrite par l'ancienne
-// version serait relue telle quelle -- les nouveaux champs liraient des
-// octets EEPROM jamais initialises (valeurs aleatoires) au lieu de
-// declencher initialiserConfigParDefaut().
-#define MAGIC_NUMBER 0xAC
+// [FIX] Bump 0xAD -> 0xAE : ajout de strobeDureeMs[30], la duree du
+// strobe devient PAR EQUIPE (configurable ou continu) au lieu d'une
+// duree fixe globale (WIN_STROBE_DURATION_MS). Sans ce bump, une EEPROM
+// ecrite par l'ancienne version serait relue telle quelle.
+#define MAGIC_NUMBER 0xAE
 #define PC_SERIAL  Serial3   // liaison vers le PC (logiciel Node.js)
 #define NANO_SERIAL Serial2  // liaison vers le RF-Nano (RX2=17, TX2=16)
 #define NANO_BAUD 19200
@@ -32,15 +31,29 @@ void getMcusrEtStopperWdt(void) {
 // =========================================================
 // STRUCTURE EEPROM
 // =========================================================
-struct QuizConfig {
-    byte magic;
-    int nbEquipes;
+// Un profil de canaux par projecteur -- permet de melanger des modeles
+// differents (projecteur RGB simple, lyre utilisee juste pour sa couleur,
+// etc.) sans jamais toucher au code : chaque projecteur a son propre
+// nombre de canaux et ses propres offsets, au lieu d'un reglage unique
+// impose a tous.
+struct FixtureProfile {
     int nbCanaux;
     int offDim, offR, offG, offB;
     int offStrobe;      // -1 = pas de canal strobe sur ce projecteur
     byte strobeValue;   // valeur qui declenche le strobe (depend du projecteur)
+};
+
+struct QuizConfig {
+    byte magic;
+    int nbEquipes;
     int adressesDMX[30];
+    FixtureProfile profils[30];
     byte couleurs[30][30][3];
+    // Duree du strobe a l'annonce du gagnant, PAR EQUIPE (pas globale) :
+    // 0 = pas de strobe pour cette equipe (affichage fixe immediat),
+    // -1 = strobe continu (ne s'arrete jamais tout seul, jusqu'au
+    // prochain valider/refuser), sinon duree en ms.
+    int strobeDureeMs[30];
 } settings;
 
 // =========================================================
@@ -86,7 +99,7 @@ uint8_t serialLen = 0;
 char nanoBuf[SERIAL_BUF_LEN];
 uint8_t nanoLen = 0;
 
-void setProjecteur(int addr, int r, int g, int b, byte strobe);
+void setProjecteur(int addr, int r, int g, int b, byte strobe, const FixtureProfile &profil);
 void eteindreLumieres();
 void flashDmxUpdate();
 void flashDmxStartVert();
@@ -130,8 +143,8 @@ void flashDmxUpdate() {
         for (int p = 0; p < 30; p++) {
             int addr = settings.adressesDMX[p];
             if (addr > 0 && addr <= 512) {
-                if (vert) setProjecteur(addr, 0, 255, 0, 0);
-                else       setProjecteur(addr, 255, 0, 0, 0);
+                if (vert) setProjecteur(addr, 0, 255, 0, 0, settings.profils[p]);
+                else       setProjecteur(addr, 255, 0, 0, 0, settings.profils[p]);
             }
         }
     } else {
@@ -150,13 +163,18 @@ void flashDmxUpdate() {
 void initialiserConfigParDefaut() {
     settings.magic     = MAGIC_NUMBER;
     settings.nbEquipes = 8;
-    settings.nbCanaux  = 8;
-    settings.offDim    = 0;
-    settings.offR      = 1;
-    settings.offG      = 2;
-    settings.offB      = 3;
-    settings.offStrobe = -1;  // desactive tant que non configure
-    settings.strobeValue = 0;
+
+    for (int p = 0; p < 30; p++) {
+        settings.profils[p].nbCanaux    = 8;
+        settings.profils[p].offDim      = 0;
+        settings.profils[p].offR        = 1;
+        settings.profils[p].offG        = 2;
+        settings.profils[p].offB        = 3;
+        settings.profils[p].offStrobe   = -1; // desactive tant que non configure
+        settings.profils[p].strobeValue = 0;
+    }
+
+    for (int eq = 0; eq < 30; eq++) settings.strobeDureeMs[eq] = 0; // pas de strobe tant que non configure
 
     settings.adressesDMX[0] = 51;
     settings.adressesDMX[1] = 59;
@@ -203,8 +221,7 @@ void setup() {
 
     EEPROM.get(0, settings);
     if (settings.magic != MAGIC_NUMBER ||
-        settings.nbEquipes < 1 || settings.nbEquipes > 30 ||
-        settings.nbCanaux  < 1 || settings.nbCanaux  > 30) {
+        settings.nbEquipes < 1 || settings.nbEquipes > 30) {
         initialiserConfigParDefaut();
     }
 
@@ -410,22 +427,29 @@ void parseCommande(const char *line) {
         actionRelancePartiel();
     }
     else if (starts_with(line, "SET_PATCH:")) {
-        // offStrobe/strobeValue (index 5/6) sont optionnels : retro-compat
-        // avec un logiciel de config pas encore mis a jour qui n'enverrait
-        // que les 5 premiers champs (n==5) -> le canal strobe reste alors
-        // tel qu'il etait deja configure, au lieu d'etre efface.
-        int vals[7] = {0};
-        uint8_t n = parse_colon_ints(line + 9, vals, 7);
-        if (n >= 5) {
-            int nbCanauxTmp = constrain(vals[0], 1, 30);
-            settings.nbCanaux = nbCanauxTmp;
-            settings.offDim   = constrain(vals[1], 0, nbCanauxTmp - 1);
-            settings.offR     = constrain(vals[2], 0, nbCanauxTmp - 1);
-            settings.offG     = constrain(vals[3], 0, nbCanauxTmp - 1);
-            settings.offB     = constrain(vals[4], 0, nbCanauxTmp - 1);
-            if (n >= 7) {
-                settings.offStrobe   = constrain(vals[5], -1, nbCanauxTmp - 1);
-                settings.strobeValue = (byte)constrain(vals[6], 0, 255);
+        // Format : SET_PATCH:<idx>:<nbCanaux>:<offDim>:<offR>:<offG>:<offB>[:<offStrobe>:<strobeValue>]
+        // offStrobe/strobeValue sont optionnels : retro-compat avec un
+        // logiciel de config pas encore mis a jour qui n'enverrait que les
+        // 5 premiers champs (n==5) -> le canal strobe de ce projecteur
+        // reste tel qu'il etait deja configure, au lieu d'etre efface.
+        int vals[8] = {0};
+        uint8_t n = parse_colon_ints(line + 9, vals, 8);
+        if (n >= 6) {
+            int idx = vals[0];
+            if (idx < 0 || idx >= 30) {
+                PC_SERIAL.println("ERR:PATCH_OUT_OF_RANGE");
+                return;
+            }
+            int nbCanauxTmp = constrain(vals[1], 1, 30);
+            FixtureProfile &prof = settings.profils[idx];
+            prof.nbCanaux = nbCanauxTmp;
+            prof.offDim   = constrain(vals[2], 0, nbCanauxTmp - 1);
+            prof.offR     = constrain(vals[3], 0, nbCanauxTmp - 1);
+            prof.offG     = constrain(vals[4], 0, nbCanauxTmp - 1);
+            prof.offB     = constrain(vals[5], 0, nbCanauxTmp - 1);
+            if (n >= 8) {
+                prof.offStrobe   = constrain(vals[6], -1, nbCanauxTmp - 1);
+                prof.strobeValue = (byte)constrain(vals[7], 0, 255);
             }
             PC_SERIAL.println("CONF:PATCH_OK");
         } else {
@@ -472,6 +496,23 @@ void parseCommande(const char *line) {
             PC_SERIAL.println("ERR:COL_INCOMPLETE");
         }
     }
+    else if (starts_with(line, "SET_STROBE_EQ:")) {
+        // Format : SET_STROBE_EQ:<equipe>:<dureeMs>
+        // dureeMs : 0 = pas de strobe, -1 = continu, >0 = duree en ms
+        int vals[2] = {0};
+        uint8_t n = parse_colon_ints(line + 13, vals, 2);
+        if (n >= 2) {
+            int eq = vals[0] - 1;
+            if (eq >= 0 && eq < 30) {
+                settings.strobeDureeMs[eq] = constrain(vals[1], -1, 32000);
+                PC_SERIAL.println("CONF:STROBE_EQ_OK");
+            } else {
+                PC_SERIAL.println("ERR:STROBE_EQ_OUT_OF_RANGE");
+            }
+        } else {
+            PC_SERIAL.println("ERR:STROBE_EQ_INCOMPLETE");
+        }
+    }
     else if (strcmp(line, "SAVE_CONFIG") == 0) {
         settings.magic = MAGIC_NUMBER;
         wdt_disable();
@@ -490,20 +531,21 @@ void parseCommande(const char *line) {
 // =========================================================
 // LUMIÈRES DMX
 // =========================================================
-void setProjecteur(int addr, int r, int g, int b, byte strobe) {
-    int maxC = constrain(settings.nbCanaux, 1, 30);
-    if (settings.offDim >= 0 && settings.offDim < maxC) DMXSerial.write(addr + settings.offDim, 255);
-    if (settings.offR   >= 0 && settings.offR   < maxC) DMXSerial.write(addr + settings.offR,   r);
-    if (settings.offG   >= 0 && settings.offG   < maxC) DMXSerial.write(addr + settings.offG,   g);
-    if (settings.offB   >= 0 && settings.offB   < maxC) DMXSerial.write(addr + settings.offB,   b);
-    if (settings.offStrobe >= 0 && settings.offStrobe < maxC) DMXSerial.write(addr + settings.offStrobe, strobe);
+void setProjecteur(int addr, int r, int g, int b, byte strobe, const FixtureProfile &profil) {
+    int maxC = constrain(profil.nbCanaux, 1, 30);
+    if (profil.offDim >= 0 && profil.offDim < maxC) DMXSerial.write(addr + profil.offDim, 255);
+    if (profil.offR   >= 0 && profil.offR   < maxC) DMXSerial.write(addr + profil.offR,   r);
+    if (profil.offG   >= 0 && profil.offG   < maxC) DMXSerial.write(addr + profil.offG,   g);
+    if (profil.offB   >= 0 && profil.offB   < maxC) DMXSerial.write(addr + profil.offB,   b);
+    if (profil.offStrobe >= 0 && profil.offStrobe < maxC) DMXSerial.write(addr + profil.offStrobe, strobe);
 }
 
 void eteindreLumieres() {
     for (int p = 0; p < 30; p++) {
         int addr = settings.adressesDMX[p];
         if (addr > 0 && addr <= 512) {
-            for (int c = 0; c < settings.nbCanaux; c++) {
+            int nbCanaux = constrain(settings.profils[p].nbCanaux, 1, 30);
+            for (int c = 0; c < nbCanaux; c++) {
                 DMXSerial.write(addr + c, 0);
             }
         }
@@ -524,35 +566,41 @@ void allumerCouleurEquipe(int equipe) {
                 settings.couleurs[idxEq][p][0],
                 settings.couleurs[idxEq][p][1],
                 settings.couleurs[idxEq][p][2],
-                0
+                0,
+                settings.profils[p]
             );
         }
     }
 }
 
 // =========================================================
-// EFFET D'ANNONCE DU GAGNANT : strobe bref (WIN_STROBE_DURATION_MS) sur
-// la couleur de l'equipe, puis affichage fixe. Non-bloquant (comme
-// flashDmxUpdate) : declencherEffetGagnant() ecrit l'etat initial tout
-// de suite, updateWinEffect() bascule vers l'etat fixe une fois le delai
-// ecoule. Desactive automatiquement (offStrobe == -1, non configure) :
-// se comporte alors comme un allumerCouleurEquipe() direct.
+// EFFET D'ANNONCE DU GAGNANT : strobe sur la couleur de l'equipe, puis
+// affichage fixe -- reglage PAR EQUIPE (settings.strobeDureeMs), pas une
+// duree unique pour tout le monde :
+//   0  -> pas de strobe du tout, affichage fixe immediat
+//   -1 -> strobe continu, ne bascule jamais tout seul (jusqu'au prochain
+//         valider/refuser)
+//   >0 -> strobe pendant ce nombre de ms puis bascule en fixe
+// Non-bloquant (comme flashDmxUpdate) : declencherEffetGagnant() ecrit
+// l'etat initial tout de suite, updateWinEffect() gere la suite.
 // =========================================================
-#define WIN_STROBE_DURATION_MS 400
 bool winEffectActive = false;
 int winEffectSignal = -1;
+int winEffectDureeMs = 0;
 unsigned long winEffectStartMs = 0;
 
 void declencherEffetGagnant(int equipe) {
-    if (settings.offStrobe < 0) {
-        // Pas de canal strobe configure sur ce projecteur -> affichage direct.
+    int idxEq = equipe - 1;
+    if (idxEq < 0 || idxEq >= 30) return;
+
+    int duree = settings.strobeDureeMs[idxEq];
+    if (duree == 0) {
+        // Cette equipe n'a pas de strobe configure -> affichage direct.
         allumerCouleurEquipe(equipe);
         return;
     }
 
     eteindreLumieres();
-    int idxEq = equipe - 1;
-    if (idxEq < 0 || idxEq >= 30) return;
     for (int p = 0; p < 30; p++) {
         int addr = settings.adressesDMX[p];
         if (addr > 0 && addr <= 512) {
@@ -560,12 +608,14 @@ void declencherEffetGagnant(int equipe) {
                 settings.couleurs[idxEq][p][0],
                 settings.couleurs[idxEq][p][1],
                 settings.couleurs[idxEq][p][2],
-                settings.strobeValue
+                settings.profils[p].strobeValue,
+                settings.profils[p]
             );
         }
     }
     winEffectActive = true;
     winEffectSignal = equipe;
+    winEffectDureeMs = duree;
     winEffectStartMs = millis();
 }
 
@@ -581,7 +631,9 @@ void updateWinEffect() {
         return;
     }
 
-    if ((long)(millis() - winEffectStartMs) < WIN_STROBE_DURATION_MS) return;
+    if (winEffectDureeMs < 0) return; // strobe continu : ne bascule jamais tout seul
+
+    if ((long)(millis() - winEffectStartMs) < winEffectDureeMs) return;
 
     winEffectActive = false;
     allumerCouleurEquipe(winEffectSignal); // bascule strobe -> fixe
