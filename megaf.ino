@@ -19,11 +19,13 @@ void getMcusrEtStopperWdt(void) {
 // CONFIGURATION MATÉRIELLE
 // =========================================================
 #define LED 13
-// [FIX] Bump 0xAD -> 0xAE : ajout de strobeDureeMs[30], la duree du
-// strobe devient PAR EQUIPE (configurable ou continu) au lieu d'une
-// duree fixe globale (WIN_STROBE_DURATION_MS). Sans ce bump, une EEPROM
-// ecrite par l'ancienne version serait relue telle quelle.
-#define MAGIC_NUMBER 0xAE
+// [FIX] Bump 0xAE -> 0xAF : FixtureProfile gagne "mode" (RGB continu vs
+// roue de couleurs, pour les lyres) et "strobeRepos" (valeur du canal
+// obturateur hors strobe -- 0 normalement, mais certaines lyres ont besoin
+// d'un obturateur maintenu ouvert en dehors du strobe, sinon la lumiere
+// reste noire). Sans ce bump, une EEPROM ecrite par l'ancienne version
+// serait relue telle quelle.
+#define MAGIC_NUMBER 0xAF
 #define PC_SERIAL  Serial3   // liaison vers le PC (logiciel Node.js)
 #define NANO_SERIAL Serial2  // liaison vers le RF-Nano (RX2=17, TX2=16)
 #define NANO_BAUD 19200
@@ -41,6 +43,18 @@ struct FixtureProfile {
     int offDim, offR, offG, offB;
     int offStrobe;      // -1 = pas de canal strobe sur ce projecteur
     byte strobeValue;   // valeur qui declenche le strobe (depend du projecteur)
+    // Valeur du canal offStrobe EN DEHORS du strobe (etat normal/fixe) :
+    // 0 pour un projecteur simple avec un canal strobe dedie (comportement
+    // d'origine). Certaines lyres combinent obturateur+strobe sur le meme
+    // canal (ex: 0-9 = noir, 250-255 = plein feu) -- pour elles, mettre
+    // strobeRepos a une valeur "plein feu" (ex: 255), sinon la lumiere
+    // reste noire des que le strobe transitoire se termine.
+    byte strobeRepos;
+    // 0 = RGB continu (offR/offG/offB independants, comportement d'origine).
+    // 1 = roue de couleurs (offR reutilise comme canal unique de la roue ;
+    // offG/offB ignores) -- la couleur RGB de l'equipe est convertie vers
+    // la position de roue la plus proche.
+    byte mode;
 };
 
 struct QuizConfig {
@@ -172,6 +186,8 @@ void initialiserConfigParDefaut() {
         settings.profils[p].offB        = 3;
         settings.profils[p].offStrobe   = -1; // desactive tant que non configure
         settings.profils[p].strobeValue = 0;
+        settings.profils[p].strobeRepos = 0;  // canal strobe dedie classique
+        settings.profils[p].mode        = 0;  // RGB continu par defaut
     }
 
     for (int eq = 0; eq < 30; eq++) settings.strobeDureeMs[eq] = 0; // pas de strobe tant que non configure
@@ -427,13 +443,12 @@ void parseCommande(const char *line) {
         actionRelancePartiel();
     }
     else if (starts_with(line, "SET_PATCH:")) {
-        // Format : SET_PATCH:<idx>:<nbCanaux>:<offDim>:<offR>:<offG>:<offB>[:<offStrobe>:<strobeValue>]
-        // offStrobe/strobeValue sont optionnels : retro-compat avec un
-        // logiciel de config pas encore mis a jour qui n'enverrait que les
-        // 5 premiers champs (n==5) -> le canal strobe de ce projecteur
-        // reste tel qu'il etait deja configure, au lieu d'etre efface.
-        int vals[8] = {0};
-        uint8_t n = parse_colon_ints(line + 9, vals, 8);
+        // Format : SET_PATCH:<idx>:<nbCanaux>:<offDim>:<offR>:<offG>:<offB>[:<offStrobe>:<strobeValue>[:<strobeRepos>:<mode>]]
+        // Les champs entre crochets sont optionnels : retro-compat avec un
+        // logiciel de config pas encore mis a jour -> les champs absents
+        // restent tels qu'ils etaient deja configures, au lieu d'etre effaces.
+        int vals[10] = {0};
+        uint8_t n = parse_colon_ints(line + 9, vals, 10);
         if (n >= 6) {
             int idx = vals[0];
             if (idx < 0 || idx >= 30) {
@@ -450,6 +465,10 @@ void parseCommande(const char *line) {
             if (n >= 8) {
                 prof.offStrobe   = constrain(vals[6], -1, nbCanauxTmp - 1);
                 prof.strobeValue = (byte)constrain(vals[7], 0, 255);
+            }
+            if (n >= 10) {
+                prof.strobeRepos = (byte)constrain(vals[8], 0, 255);
+                prof.mode        = (byte)constrain(vals[9], 0, 1);
             }
             PC_SERIAL.println("CONF:PATCH_OK");
         } else {
@@ -531,13 +550,60 @@ void parseCommande(const char *line) {
 // =========================================================
 // LUMIÈRES DMX
 // =========================================================
+
+// Convertit une couleur RGB continue vers la position de roue de couleurs
+// la plus proche (pour les lyres qui n'ont qu'un seul canal "Couleur" au
+// lieu de canaux R/G/B independants). Valeurs de reference approximatives
+// pour chaque couleur de roue standard ; renvoie la valeur DMX du centre
+// de la plage correspondante.
+byte couleurVersRoue(byte r, byte g, byte b) {
+    static const struct { byte r, g, b, valeur; } roue[] = {
+        {255, 255, 255,   4}, // Blanc
+        {255,   0,   0,  14}, // Rouge
+        {  0, 255,   0,  24}, // Vert
+        {  0,   0, 255,  34}, // Bleu
+        {255, 255,   0,  44}, // Jaune
+        {255,   0, 128,  54}, // Rose
+        {255, 128,   0,  64}, // Orange
+        {  0, 255, 255,  74}, // Cyan
+    };
+    long meilleureDist = -1;
+    byte meilleureValeur = roue[0].valeur;
+    for (uint8_t i = 0; i < 8; i++) {
+        long dr = (long)r - roue[i].r;
+        long dg = (long)g - roue[i].g;
+        long db = (long)b - roue[i].b;
+        long dist = dr * dr + dg * dg + db * db;
+        if (meilleureDist < 0 || dist < meilleureDist) {
+            meilleureDist = dist;
+            meilleureValeur = roue[i].valeur;
+        }
+    }
+    return meilleureValeur;
+}
+
 void setProjecteur(int addr, int r, int g, int b, byte strobe, const FixtureProfile &profil) {
     int maxC = constrain(profil.nbCanaux, 1, 30);
     if (profil.offDim >= 0 && profil.offDim < maxC) DMXSerial.write(addr + profil.offDim, 255);
-    if (profil.offR   >= 0 && profil.offR   < maxC) DMXSerial.write(addr + profil.offR,   r);
-    if (profil.offG   >= 0 && profil.offG   < maxC) DMXSerial.write(addr + profil.offG,   g);
-    if (profil.offB   >= 0 && profil.offB   < maxC) DMXSerial.write(addr + profil.offB,   b);
-    if (profil.offStrobe >= 0 && profil.offStrobe < maxC) DMXSerial.write(addr + profil.offStrobe, strobe);
+
+    if (profil.mode == 1) {
+        // Roue de couleurs : offR reutilise comme canal unique de couleur,
+        // offG/offB ignores (pas de canaux separes sur ce type de fixture).
+        if (profil.offR >= 0 && profil.offR < maxC) {
+            DMXSerial.write(addr + profil.offR, couleurVersRoue((byte)r, (byte)g, (byte)b));
+        }
+    } else {
+        if (profil.offR >= 0 && profil.offR < maxC) DMXSerial.write(addr + profil.offR, r);
+        if (profil.offG >= 0 && profil.offG < maxC) DMXSerial.write(addr + profil.offG, g);
+        if (profil.offB >= 0 && profil.offB < maxC) DMXSerial.write(addr + profil.offB, b);
+    }
+
+    if (profil.offStrobe >= 0 && profil.offStrobe < maxC) {
+        // strobe==0 -> etat de repos (0 normalement, ou "plein feu" si ce
+        // canal sert aussi d'obturateur bloquant, comme sur une lyre).
+        byte valeur = (strobe != 0) ? strobe : profil.strobeRepos;
+        DMXSerial.write(addr + profil.offStrobe, valeur);
+    }
 }
 
 void eteindreLumieres() {

@@ -91,6 +91,13 @@ FIXTURE_PROFILE_DEFAULTS = {
     "off_b": 3,
     "off_strobe": -1,    # -1 = pas de canal strobe (depend du projecteur)
     "strobe_value": 200, # valeur qui declenche le strobe (depend du projecteur)
+    "strobe_repos": 0,   # valeur du canal strobe HORS strobe : 0 normalement,
+                         # mais certaines lyres combinent obturateur+strobe sur
+                         # le meme canal -- mettre ~255 pour elles (sinon la
+                         # lumiere reste noire une fois le strobe termine)
+    "mode": 0,           # 0 = RGB continu (off_r/off_g/off_b independants)
+                         # 1 = roue de couleurs (off_r = canal unique de la
+                         # roue, off_g/off_b ignores) -- pour les lyres
 }
 
 
@@ -264,7 +271,9 @@ def envoyer_configuration_complete():
 
             for i, grp in enumerate(config["groupes_dmx"]):
                 trame_patch = (f"SET_PATCH:{i}:{grp['nb_canaux']}:{grp['off_dim']}:{grp['off_r']}:{grp['off_g']}:"
-                               f"{grp['off_b']}:{grp['off_strobe']}:{grp['strobe_value']}\n")
+                               f"{grp['off_b']}:{grp['off_strobe']}:{grp['strobe_value']}:"
+                               f"{grp.get('strobe_repos', FIXTURE_PROFILE_DEFAULTS['strobe_repos'])}:"
+                               f"{grp.get('mode', FIXTURE_PROFILE_DEFAULTS['mode'])}\n")
                 ser.write(trame_patch.encode())
                 current_step += 1
                 schedule_progress_bar(current_step, total_steps)
@@ -462,6 +471,12 @@ def setup_ui():
                                 width=110,
                                 callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"nb_canaux": a}),
                             )
+                            dpg.add_combo(
+                                label="Mode couleur", items=["RGB continu", "Roue de couleurs (lyre)"],
+                                default_value="Roue de couleurs (lyre)" if grp.get("mode", FIXTURE_PROFILE_DEFAULTS["mode"]) == 1 else "RGB continu",
+                                width=200,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"mode": 1 if a.startswith("Roue") else 0}),
+                            )
                             dpg.add_text("Offsets des canaux (0 = premier canal du projecteur) :", color=[150, 150, 150])
                             dpg.add_input_int(
                                 label="Offset DIMMER", default_value=grp.get("off_dim", FIXTURE_PROFILE_DEFAULTS["off_dim"]),
@@ -469,7 +484,7 @@ def setup_ui():
                                 callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_dim": a}),
                             )
                             dpg.add_input_int(
-                                label="Offset ROUGE", default_value=grp.get("off_r", FIXTURE_PROFILE_DEFAULTS["off_r"]),
+                                label="Offset ROUGE (= canal roue si mode Roue de couleurs)", default_value=grp.get("off_r", FIXTURE_PROFILE_DEFAULTS["off_r"]),
                                 width=110,
                                 callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"off_r": a}),
                             )
@@ -492,6 +507,12 @@ def setup_ui():
                                 label="Valeur STROBE (0-255)", default_value=grp.get("strobe_value", FIXTURE_PROFILE_DEFAULTS["strobe_value"]),
                                 width=110,
                                 callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"strobe_value": a}),
+                            )
+                            dpg.add_input_int(
+                                label="Valeur repos obturateur (0 normalement, ~255 si obturateur bloquant type lyre)",
+                                default_value=grp.get("strobe_repos", FIXTURE_PROFILE_DEFAULTS["strobe_repos"]),
+                                width=110,
+                                callback=lambda s, a, u=i: config["groupes_dmx"][u].update({"strobe_repos": a}),
                             )
                             dpg.add_text("Strobe ~400ms a l'annonce du gagnant, puis couleur fixe.",
                                          color=[150, 150, 150], wrap=420)
