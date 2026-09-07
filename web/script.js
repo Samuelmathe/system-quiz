@@ -2,6 +2,7 @@
   "use strict";
 
   var STORAGE_KEY = "regie_quiz_dmx_v1";
+  var MAX_EQUIPES = 30;
 
   var defaultState = {
     equipes: [
@@ -66,6 +67,17 @@
   }
   tabConfig.addEventListener("click", function () { showTab("config"); });
   tabScore.addEventListener("click", function () { showTab("score"); });
+
+  // Le bandeau "équipe en écoute" reste collé juste sous l'en-tête en scrollant —
+  // utile sur mobile avec beaucoup d'équipes (jusqu'à 30) dans la grille.
+  function updateMastheadOffset() {
+    var masthead = document.querySelector("header.masthead");
+    if (masthead) {
+      document.documentElement.style.setProperty("--masthead-h", masthead.offsetHeight + "px");
+    }
+  }
+  window.addEventListener("resize", updateMastheadOffset);
+  updateMastheadOffset();
 
   // ---------------- Utilitaires couleur ----------------
   function hexToRgb(hex) {
@@ -313,9 +325,16 @@
       row.appendChild(del);
       equipesList.appendChild(row);
     });
+
+    var addBtn = document.getElementById("btn-add-equipe");
+    var atMax = state.equipes.length >= MAX_EQUIPES;
+    addBtn.disabled = atMax;
+    document.getElementById("equipes-count").textContent =
+      state.equipes.length + " / " + MAX_EQUIPES + " équipes" + (atMax ? " — limite atteinte" : "");
   }
 
   document.getElementById("btn-add-equipe").addEventListener("click", function () {
+    if (state.equipes.length >= MAX_EQUIPES) return;
     state.equipes.push({
       nom: "Équipe " + (state.equipes.length + 1),
       couleurs: state.projecteurs.map(function () { return "#ffffff"; }),
@@ -411,7 +430,7 @@
         if (!Array.isArray(data.equipes) || !Array.isArray(data.projecteurs)) {
           throw new Error("format inattendu");
         }
-        state.equipes = data.equipes;
+        state.equipes = data.equipes.slice(0, MAX_EQUIPES);
         state.projecteurs = data.projecteurs;
         state.questions = Array.isArray(data.questions) ? data.questions : [];
         state.currentQuestionIndex = typeof data.currentQuestionIndex === "number" ? data.currentQuestionIndex : 0;
