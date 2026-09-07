@@ -742,12 +742,28 @@
     return out;
   }
 
+  // Rendu CSS des couleurs d'une équipe : un aplat si une seule couleur, sinon un
+  // dégradé à bandes nettes qui montre chaque couleur — utilisé partout où l'équipe
+  // "a la main" (bandeau animateur, écran public) pour ne perdre aucune couleur.
+  function teamColorBackground(eq) {
+    var colors = eq.couleursAffichage || [];
+    if (colors.length <= 1) return colors[0] || "#ffffff";
+    var n = colors.length;
+    var stops = [];
+    colors.forEach(function (c, i) {
+      stops.push(c + " " + ((i / n) * 100).toFixed(2) + "%");
+      stops.push(c + " " + (((i + 1) / n) * 100).toFixed(2) + "%");
+    });
+    return "linear-gradient(135deg, " + stops.join(", ") + ")";
+  }
+
   function renderActiveBuzzBanner() {
     var banner = document.getElementById("active-buzz-banner");
     if (gameState === "buzzed" && currentTeam !== null) {
       var eq = state.equipes[currentTeam];
       banner.hidden = false;
       banner.style.setProperty("--team-color", primaryColor(eq));
+      document.getElementById("abb-swatch").style.background = teamColorBackground(eq);
       document.getElementById("abb-team-name").textContent = eq.nom;
     } else {
       banner.hidden = true;
@@ -1007,7 +1023,12 @@
       var team = document.createElement("div");
       team.className = "p-team";
       team.textContent = eq.nom;
-      team.style.color = primaryColor(eq);
+      if (eq.couleursAffichage.length > 1) {
+        team.style.backgroundImage = teamColorBackground(eq);
+        team.classList.add("p-team-multi");
+      } else {
+        team.style.color = primaryColor(eq);
+      }
       var qpts = state.pointsCourants;
       var pts = document.createElement("div");
       pts.className = "p-points";

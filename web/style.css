@@ -457,6 +457,19 @@
     flex-wrap: wrap;
   }
 
+  .abb-identity {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .abb-swatch {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    flex-shrink: 0;
+  }
+
   .abb-team {
     font-family: 'Barlow Semi Condensed', sans-serif;
     font-weight: 800;
@@ -478,6 +491,8 @@
 
   @media (max-width: 640px) {
     .active-buzz-banner { flex-direction: column; align-items: stretch; text-align: center; padding: 26px 20px; }
+    .abb-identity { flex-direction: column; }
+    .abb-swatch { width: 72px; height: 72px; }
     .abb-team { font-size: 36px; }
     .abb-actions { flex-direction: column; }
     .abb-actions button { padding: 20px 0; font-size: 20px; }
@@ -831,6 +846,12 @@
     font-weight: 800;
     font-size: 88px;
     line-height: 1.02;
+  }
+  .public-overlay .p-team-multi {
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
   }
   .public-overlay .p-points {
     font-family: 'Work Sans', sans-serif;
