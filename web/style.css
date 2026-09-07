@@ -659,6 +659,21 @@
     gap: 6px;
   }
 
+  .team-count-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .team-count-control button.btn {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    line-height: 1;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .team-count-control .mono { min-width: 52px; text-align: center; }
+
   .questions-status { font-size: 12px; color: var(--ink-soft); }
 
   /* ---------- Animateur : question courante ---------- */

@@ -333,17 +333,39 @@
       state.equipes.length + " / " + MAX_EQUIPES + " équipes" + (atMax ? " — limite atteinte" : "");
   }
 
-  document.getElementById("btn-add-equipe").addEventListener("click", function () {
-    if (state.equipes.length >= MAX_EQUIPES) return;
-    state.equipes.push({
+  function makeNewEquipe() {
+    return {
       nom: "Équipe " + (state.equipes.length + 1),
       couleurs: state.projecteurs.map(function () { return "#ffffff"; }),
       couleursAffichage: ["#ffffff"],
       score: 0,
       strobeDureeMs: 0
-    });
+    };
+  }
+
+  document.getElementById("btn-add-equipe").addEventListener("click", function () {
+    if (state.equipes.length >= MAX_EQUIPES) return;
+    state.equipes.push(makeNewEquipe());
     saveState();
     renderEquipesConfig();
+  });
+
+  // Ajout/retrait d'équipes directement depuis la page Animateur : un animateur
+  // n'a pas forcément accès à l'onglet Configuration (ex : l'installateur DMX
+  // configure les projecteurs sur sa propre page, l'animateur n'a que celle-ci).
+  document.getElementById("btn-add-equipe-anim").addEventListener("click", function () {
+    if (state.equipes.length >= MAX_EQUIPES) return;
+    state.equipes.push(makeNewEquipe());
+    saveState();
+    renderEquipesConfig();
+    renderAnimateur();
+  });
+  document.getElementById("btn-remove-equipe-anim").addEventListener("click", function () {
+    if (state.equipes.length <= 1) return;
+    state.equipes.pop();
+    saveState();
+    renderEquipesConfig();
+    renderAnimateur();
   });
 
   document.getElementById("btn-reset").addEventListener("click", function () {
@@ -789,11 +811,18 @@
     }
   }
 
+  function updateAnimTeamCountUI() {
+    document.getElementById("anim-equipes-count").textContent = state.equipes.length + " / " + MAX_EQUIPES;
+    document.getElementById("btn-add-equipe-anim").disabled = state.equipes.length >= MAX_EQUIPES;
+    document.getElementById("btn-remove-equipe-anim").disabled = state.equipes.length <= 1;
+  }
+
   function renderAnimateur() {
     updateStatePill();
     updateChronoReadout();
     renderQuestionPanel();
     renderActiveBuzzBanner();
+    updateAnimTeamCountUI();
     scoreGrid.innerHTML = "";
 
     state.equipes.forEach(function (eq, i) {
