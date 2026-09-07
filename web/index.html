@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Régie Quiz DMX</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700;800&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<header class="masthead">
+  <div class="brand">
+    <h1>Régie Quiz</h1>
+    <span class="tag">DMX &middot; RADIO &middot; WEB</span>
+  </div>
+  <nav class="tabs">
+    <button id="tab-config" class="active">Configuration</button>
+    <button id="tab-score">Animateur</button>
+  </nav>
+</header>
+
+<main class="page">
+
+  <section id="view-config">
+    <div class="toolbar">
+      <span class="status-line"><span class="status-dot"></span><span id="config-io-status">Modifications enregistrées localement</span></span>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn subtle" id="btn-export-config">Exporter</button>
+        <button class="btn subtle" id="btn-load-config">Charger une configuration</button>
+        <input type="file" id="input-load-config" accept=".json" hidden>
+        <button class="btn subtle" id="btn-reset">Réinitialiser</button>
+        <button class="btn primary" id="btn-sync">Synchroniser le pont</button>
+      </div>
+    </div>
+
+    <h2 class="section">Projecteurs</h2>
+    <div class="grid-fixtures" id="fixtures-grid"></div>
+
+    <h2 class="section">Équipes</h2>
+    <div class="equipes-header" id="equipes-header"></div>
+    <div id="equipes-list"></div>
+    <div style="margin-top:10px;">
+      <button class="btn" id="btn-add-equipe">+ Ajouter une équipe</button>
+    </div>
+  </section>
+
+  <section id="view-score" hidden>
+
+    <div id="anim-live">
+      <div class="game-bar">
+        <span class="state-pill" id="state-pill">EN ATTENTE</span>
+        <span class="chrono-readout mono" id="chrono-readout">--:--</span>
+        <div class="spacer-grow"></div>
+        <button class="btn" id="btn-public">Affichage public</button>
+      </div>
+
+      <div class="settings-row">
+        <div class="settings-field">
+          <button class="btn subtle" id="btn-load-questions">Charger les questions (Excel/CSV)</button>
+          <input type="file" id="input-questions-file" accept=".xlsx,.xls,.csv" hidden>
+          <span class="mono questions-status" id="questions-status">Aucun fichier chargé</span>
+        </div>
+        <div class="settings-field">
+          <label for="input-current-points">Valeur de la question</label>
+          <input type="number" id="input-current-points" min="0" value="1">
+        </div>
+        <div class="settings-field">
+          <label for="input-points-buzz">Points au buzz</label>
+          <input type="number" id="input-points-buzz" min="0" value="0">
+        </div>
+        <label class="settings-field check">
+          <input type="checkbox" id="chk-chrono-enabled" checked> Chrono actif
+        </label>
+        <div class="settings-field">
+          <label for="input-chrono-duration">Durée (s)</label>
+          <input type="number" id="input-chrono-duration" min="5" max="300" value="30">
+        </div>
+        <label class="settings-field check">
+          <input type="checkbox" id="chk-chrono-timeout" checked> Temps écoulé = faux
+        </label>
+      </div>
+
+      <div class="question-panel" id="question-panel" hidden>
+        <div class="question-meta">
+          <span class="mono" id="question-index">Question —</span>
+        </div>
+        <div class="question-text" id="question-text"></div>
+        <div class="question-nav">
+          <button class="btn subtle" id="btn-prev-question">◂ Précédente</button>
+          <button class="btn subtle" id="btn-next-question">Suivante ▸</button>
+        </div>
+      </div>
+
+      <div class="active-buzz-banner" id="active-buzz-banner" hidden>
+        <div class="abb-team" id="abb-team-name">—</div>
+        <div class="abb-actions">
+          <button class="valider" id="abb-valider">Valider</button>
+          <button class="refuser" id="abb-refuser">Refuser</button>
+        </div>
+      </div>
+
+      <div class="score-grid" id="score-grid"></div>
+
+      <div class="round-controls">
+        <button class="btn subtle" id="btn-reset-game">Réinitialiser la partie</button>
+        <button class="btn primary" id="btn-finish-game">Terminer la partie</button>
+      </div>
+
+      <h2 class="section">Journal</h2>
+      <div class="log-panel" id="log-panel"></div>
+    </div>
+
+    <div id="anim-podium" hidden>
+      <div class="banner">
+        <div>
+          <div class="eyebrow">Partie terminée</div>
+          <h2>Classement final</h2>
+        </div>
+      </div>
+      <div class="podium-stage" id="podium-stage"></div>
+      <div class="rest-list" id="podium-rest"></div>
+      <div class="stats-row" id="podium-stats"></div>
+      <div class="round-controls" style="justify-content:center;">
+        <button class="btn subtle" id="btn-podium-reset">Réinitialiser</button>
+        <button class="btn primary" id="btn-podium-continue">Continuer</button>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<div class="public-overlay" id="public-overlay" hidden>
+  <button class="close-public" id="btn-close-public" aria-label="Fermer l'affichage public">&times;</button>
+  <div id="public-content"></div>
+</div>
+
+<div class="export-modal" id="export-modal" hidden>
+  <div class="export-modal-box">
+    <h3>Configuration (JSON)</h3>
+    <p class="export-modal-hint">Copiez ce texte dans un fichier <code>.json</code> pour le conserver — c'est ce même fichier qui pourra être rechargé avec « Charger une configuration ».</p>
+    <textarea id="export-textarea" readonly spellcheck="false"></textarea>
+    <div class="export-modal-actions">
+      <button class="btn" id="btn-copy-config">Copier</button>
+      <button class="btn subtle" id="btn-close-export">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>

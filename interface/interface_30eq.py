@@ -125,6 +125,10 @@ class QuizController:
         # Donnees
         self.teams: Dict[int, dict] = {}
         self.config: Dict[str, Any] = {}
+        # Couleurs DMX réelles par équipe/projecteur, importées en lecture seule depuis
+        # config_quiz_pro.json (config_final_30.py) — jamais écrites, jamais envoyées au
+        # Mega : uniquement pour affichage de référence côté animateur.
+        self.dmx_projector_colors: Dict[int, List[List[int]]] = {}
         
         # Communication serie (lignes / evenements traites sur le thread GUI — Dear PyGui n'est pas thread-safe)
         self.serial_connection: Optional[serial.Serial] = None
@@ -348,6 +352,9 @@ class QuizController:
             "chrono_enabled": True,
             "chrono_duration_sec": 30,
             "chrono_timeout_faux": True,
+            # Couleurs d'équipe saisies par l'animateur — purement visuelles (aucun lien
+            # avec le patch DMX du Mega / config_final_30.py) : {str(team_id): [r, g, b]}.
+            "team_colors": {},
             # Position/taille fenêtre projecteur (2e écran : souvent x=1920)
             "projector_x": 1920,
             "projector_y": 0,
@@ -385,21 +392,47 @@ class QuizController:
         self.config["chrono_timeout_faux"] = self.chrono_timeout_faux
         self.save_pending = True
     
+    # Palette par défaut si l'animateur n'a pas encore choisi de couleur — purement
+    # indicative, sans rapport avec les couleurs réellement patchées sur le Mega.
+    DEFAULT_TEAM_COLORS = [
+        [230, 60, 60], [60, 120, 230], [60, 200, 110], [230, 200, 60],
+        [230, 60, 170], [60, 210, 220], [230, 130, 40], [170, 100, 230],
+    ]
+
+    def _default_team_color(self, idx: int) -> List[int]:
+        return list(self.DEFAULT_TEAM_COLORS[idx % len(self.DEFAULT_TEAM_COLORS)])
+
+    def _normalize_saved_colors(self, raw, idx: int) -> List[List[int]]:
+        """Accepte l'ancien format (un seul [r,g,b]) ou le nouveau (liste de [r,g,b]) —
+        une équipe peut avoir plusieurs couleurs d'affichage (ex : projecteurs différents)."""
+        if isinstance(raw, list) and raw:
+            if isinstance(raw[0], (list, tuple)):
+                return [list(c) for c in raw]
+            if isinstance(raw[0], (int, float)):
+                return [list(raw)]
+        return [self._default_team_color(idx)]
+
     def initialize_teams(self):
         nb_equipes = self.config.get("nb_equipes", 6)
         self.teams.clear()
-        
+        saved_colors = self.config.get("team_colors", {})
+
         for i in range(nb_equipes):
             self.teams[i] = {
                 "id": i,
                 "name": f"Equipe {i+1}",
-                "score": self.config.get("last_scores", {}).get(str(i), 0)
+                "score": self.config.get("last_scores", {}).get(str(i), 0),
+                "colors": self._normalize_saved_colors(saved_colors.get(str(i)), i),
             }
-    
+
     def save_config(self):
         try:
             scores = {str(team_id): team["score"] for team_id, team in self.teams.items()}
             self.config["last_scores"] = scores
+            self.config["team_colors"] = {
+                str(team_id): team.get("colors", [self._default_team_color(team_id)])
+                for team_id, team in self.teams.items()
+            }
             self.config["nb_equipes"] = len(self.teams)
             self.config["last_save"] = datetime.now().isoformat()
             
@@ -440,7 +473,8 @@ class QuizController:
         self.teams[new_id] = {
             "id": new_id,
             "name": f"Equipe {new_id+1}",
-            "score": 0
+            "score": 0,
+            "colors": [self._default_team_color(new_id)],
         }
         
         self.add_log(f"Equipe {new_id+1} ajoutee", color=[0, 255, 0])
@@ -462,12 +496,61 @@ class QuizController:
         
         self.add_log(f"Equipe {last_id+1} supprimee", color=[255, 150, 0])
         self.refresh_teams_display()
-        
+
         if self.current_tab == "tab_podium":
             self.update_podium_display()
-        
+
         return True
-    
+
+    # =====================================================
+    # 2.3bis COULEURS DMX (lecture seule, référence visuelle)
+    # =====================================================
+
+    def _distinct_dmx_colors(self, team_id: int) -> List[str]:
+        """Couleurs DMX réelles (par projecteur) pour cette équipe, dédupliquées —
+        une seule puce si tous les projecteurs partagent la même couleur."""
+        colors = self.dmx_projector_colors.get(team_id)
+        if not colors:
+            return []
+        seen = set()
+        out: List[str] = []
+        for c in colors:
+            try:
+                r, g, b = int(c[0]), int(c[1]), int(c[2])
+            except (TypeError, ValueError, IndexError):
+                continue
+            hexval = f"#{r:02X}{g:02X}{b:02X}"
+            if hexval not in seen:
+                seen.add(hexval)
+                out.append(hexval)
+        return out
+
+    def import_dmx_colors_callback(self, sender, app_data):
+        """Importe config_quiz_pro.json (produit par config_final_30.py) pour afficher,
+        à titre indicatif, les vraies couleurs DMX par projecteur. Lecture seule :
+        n'écrit jamais ce fichier, n'envoie rien au Mega, n'affecte pas le patch DMX."""
+        path = app_data.get("file_path_name") if isinstance(app_data, dict) else None
+        if not path or not os.path.isfile(path):
+            self.add_log("Import couleurs DMX : aucun fichier selectionne", color=[255, 150, 0])
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            equipes = data.get("equipes", [])
+            self.dmx_projector_colors = {}
+            for idx, eq in enumerate(equipes):
+                couleurs = eq.get("couleurs")
+                if isinstance(couleurs, list):
+                    self.dmx_projector_colors[idx] = couleurs
+            self.refresh_teams_display()
+            self.add_log(
+                f"Couleurs DMX importees pour {len(self.dmx_projector_colors)} equipe(s) "
+                f"(lecture seule, sans effet sur le Mega)",
+                color=[140, 220, 180],
+            )
+        except Exception as e:
+            self.add_log(f"Import couleurs DMX : fichier invalide ({e})", color=[255, 100, 100])
+
     # =====================================================
     # 2.3 CALLBACKS BOUTONS
     # =====================================================
@@ -628,8 +711,10 @@ class QuizController:
             self._set_projector_view("buzz")
             tid = self.current_team
             team_name = self._team_display_name(tid)
+            team_colors = self.teams.get(tid, {}).get("colors") or [[80, 180, 255]]
+            team_color = team_colors[0]
             dpg.set_value("txt_proj_team", team_name)
-            dpg.configure_item("txt_proj_team", show=True)
+            dpg.configure_item("txt_proj_team", show=True, color=team_color)
             dpg.set_value("txt_proj_ecoute", "EN ÉCOUTE")
             dpg.configure_item("txt_proj_ecoute", show=True)
             pts_label = f"{self.question_value} POINT{'S' if self.question_value != 1 else ''}"
@@ -1319,7 +1404,19 @@ class QuizController:
     
     def create_interface(self):
         self.create_dark_theme()
-        
+
+        with dpg.file_dialog(
+            directory_selector=False,
+            show=False,
+            modal=True,
+            callback=self.import_dmx_colors_callback,
+            tag="dmx_color_file_dialog",
+            width=600,
+            height=400,
+        ):
+            dpg.add_file_extension(".json", color=(90, 160, 255, 255))
+            dpg.add_file_extension(".*")
+
         with dpg.window(
             tag="main_window",
             label="QUIZ BOARD V6",
@@ -1399,6 +1496,12 @@ class QuizController:
                     label="PUBLIC",
                     callback=self.toggle_public_display,
                     width=80,
+                )
+                dpg.add_spacer(width=8)
+                dpg.add_button(
+                    label="Couleurs DMX...",
+                    callback=lambda s, a: dpg.show_item("dmx_color_file_dialog"),
+                    width=120,
                 )
 
             dpg.add_spacer(height=5)
@@ -1624,7 +1727,11 @@ class QuizController:
         
         team = self.teams[team_id]
         
-        with dpg.child_window(width=card_width, height=95, border=True):
+        dmx_colors = self._distinct_dmx_colors(team_id)
+        team_colors = team.get("colors") or [self._default_team_color(team_id)]
+        card_height = 95 + 24 + (18 if dmx_colors else 0)
+
+        with dpg.child_window(width=card_width, height=card_height, border=True):
             # En-tete
             with dpg.group(horizontal=True):
                 dpg.add_text(f"EQ {team_id+1}", color=[0, 200, 255])
@@ -1632,9 +1739,32 @@ class QuizController:
                 dpg.add_text(f"{team['score']} pts",
                             tag=f"team_score_{team_id}",
                             color=[255, 255, 0])
-            
+
             dpg.add_spacer(height=3)
-            
+
+            # Couleurs d'affichage (saisies par l'animateur — une équipe peut en avoir
+            # plusieurs, ex : projecteurs de couleurs différentes). Sans lien avec le DMX.
+            with dpg.group(horizontal=True):
+                for ci in range(len(team_colors)):
+                    dpg.add_color_edit(
+                        default_value=self._team_color_dpg(team_id, ci),
+                        no_alpha=True,
+                        no_inputs=True,
+                        no_label=True,
+                        width=20,
+                        height=18,
+                        callback=self.team_color_callback,
+                        user_data=(team_id, ci),
+                        tag=f"team_color_{team_id}_{ci}",
+                    )
+                    dpg.add_spacer(width=3)
+                dpg.add_button(label="+", callback=self.add_team_color_callback, user_data=team_id, width=18, height=18)
+                if len(team_colors) > 1:
+                    dpg.add_spacer(width=3)
+                    dpg.add_button(label="-", callback=self.remove_team_color_callback, user_data=team_id, width=18, height=18)
+
+            dpg.add_spacer(height=3)
+
             # Boutons + - et BUZZ
             with dpg.group(horizontal=True):
                 dpg.add_button(label="+", callback=self.plus_score_callback, user_data=team_id, width=30, height=22)
@@ -1650,7 +1780,50 @@ class QuizController:
                 dpg.add_button(label="VALIDER", callback=self.correct_answer_callback, user_data=team_id, width=75, height=22)
                 dpg.add_spacer(width=3)
                 dpg.add_button(label="FAUX", callback=self.wrong_answer_callback, user_data=team_id, width=55, height=22)
-    
+
+            if dmx_colors:
+                dpg.add_text("DMX: " + " / ".join(dmx_colors), color=[130, 132, 140])
+
+
+    def _team_color_dpg(self, team_id: int, index: int = 0) -> List[int]:
+        colors = self.teams.get(team_id, {}).get("colors") or [self._default_team_color(team_id)]
+        if index >= len(colors):
+            index = 0
+        rgb = colors[index]
+        return [int(rgb[0]), int(rgb[1]), int(rgb[2]), 255]
+
+    def team_color_callback(self, sender, app_data, user_data):
+        """Couleur saisie par l'animateur, purement visuelle (écran opérateur + écran
+        public) — jamais envoyée au Mega et sans effet sur le patch DMX."""
+        team_id, color_index = user_data
+        colors = self.teams.get(team_id, {}).get("colors")
+        if colors is None or color_index >= len(colors):
+            return
+        rgb = [max(0, min(255, round(c))) for c in app_data[:3]]
+        colors[color_index] = rgb
+        self.save_pending = True
+        if self.state == GameState.BUZZED and self.current_team == team_id:
+            self.update_projector_display()
+
+    def add_team_color_callback(self, sender, app_data, user_data):
+        """Une équipe peut avoir plusieurs couleurs (ex : plusieurs projecteurs avec des
+        couleurs différentes) — purement pour l'affichage animateur/public."""
+        team_id = user_data
+        if team_id not in self.teams:
+            return
+        colors = self.teams[team_id].setdefault("colors", [self._default_team_color(team_id)])
+        colors.append(list(colors[-1]) if colors else self._default_team_color(team_id))
+        self.save_pending = True
+        self.refresh_teams_display()
+
+    def remove_team_color_callback(self, sender, app_data, user_data):
+        team_id = user_data
+        colors = self.teams.get(team_id, {}).get("colors")
+        if colors and len(colors) > 1:
+            colors.pop()
+            self.save_pending = True
+            self.refresh_teams_display()
+
     def update_team_display(self, team_id: int):
         if team_id in self.teams:
             score_tag = f"team_score_{team_id}"
