@@ -1,0 +1,19 @@
+{
+  "name": "Quiz DMX Pro — Animateur & Régie",
+  "short_name": "Quiz DMX",
+  "description": "Télécommande mobile et régie dmx pour système de quiz interactif",
+  "start_url": "./animateur.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#080B11",
+  "theme_color": "#080B11",
+  "orientation": "portrait-primary",
+  "categories": ["entertainment", "games", "utilities"],
+  "icons": [
+    {
+      "src": "./assets/score.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

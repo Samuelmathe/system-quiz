@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#000000">
+  <title>Écran Public — Vidéoprojecteur Quiz</title>
+  
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      background: #000000;
+      overflow: hidden;
+      cursor: none; /* Cache la souris en plein écran */
+    }
+    body:hover {
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="public-container" id="public-container">
+    <!-- Halo de lumière dynamique coloré -->
+    <div class="public-halo" id="public-halo"></div>
+
+    <!-- VUE 1 : EN ATTENTE (IDLE) -->
+    <div id="view-idle" style="z-index: 10; display: flex; flex-direction: column; align-items: center;">
+      <div class="badge mono" style="font-size: 1.1rem; padding: 8px 18px; margin-bottom: 20px; background: rgba(255,255,255,0.08);">
+        PRÉPAREZ VOS BUZZERS
+      </div>
+      <h1 style="font-size: 5rem; font-weight: 900; background: var(--gemini-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; text-shadow: 0 0 60px rgba(139,92,246,0.3); margin-bottom: 30px;">
+        LE GRAND QUIZ
+      </h1>
+      <!-- Tableau des scores compact pour le public -->
+      <div id="public-mini-scores" style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; max-width: 900px;">
+        <!-- Scores affichés dynamiquement -->
+      </div>
+    </div>
+
+    <!-- VUE 2 : BUZZ ACTIF (BUZZED) -->
+    <div id="view-buzzed" style="z-index: 10; display: none; flex-direction: column; align-items: center;">
+      <div class="badge" style="font-size: 1.3rem; padding: 10px 24px; color: var(--color-gold); border-color: var(--color-gold); background: rgba(251, 191, 36, 0.15); margin-bottom: 12px;">
+        EN ÉCOUTE
+      </div>
+      <div id="public-palette-desc" style="font-size: 2.2rem; font-weight: 900; text-transform: uppercase; color: rgba(255,255,255,0.9); letter-spacing: 2px; margin-bottom: 6px; text-shadow: 0 4px 20px rgba(0,0,0,0.8);"></div>
+      <div class="public-team-giant" id="public-team-name">—</div>
+      <div class="public-timer-giant" id="public-timer">30</div>
+    </div>
+
+    <!-- VUE 3 : PODIUM FINAL (FINISHED) -->
+    <div id="view-podium" style="z-index: 10; display: none; flex-direction: column; align-items: center; width: 100%; max-width: 1000px;">
+      <h1 style="font-size: 4.5rem; color: var(--color-gold); margin-bottom: 40px; text-shadow: 0 0 40px rgba(251,191,36,0.4);">
+        🏆 PODIUM FINAL
+      </h1>
+      <div id="public-podium-cards" style="display: flex; gap: 24px; align-items: flex-end; justify-content: center; width: 100%; margin-bottom: 30px;">
+        <!-- Rendu dynamique des marches 2e, 1er, 3e -->
+      </div>
+    </div>
+
+    <!-- Bouton discret plein écran en bas à droite -->
+    <button id="btn-fs" style="position: absolute; bottom: 20px; right: 20px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #fff; border-radius: 8px; padding: 8px 14px; cursor: pointer; z-index: 50; font-size: 0.8rem;">
+      Plein Écran (F11)
+    </button>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    (function() {
+      "use strict";
+      const hub = window.QuizHub;
+
+      const viewIdle = document.getElementById("view-idle");
+      const viewBuzzed = document.getElementById("view-buzzed");
+      const viewPodium = document.getElementById("view-podium");
+
+      const publicHalo = document.getElementById("public-halo");
+      const publicTeamName = document.getElementById("public-team-name");
+      const publicTimer = document.getElementById("public-timer");
+      const publicMiniScores = document.getElementById("public-mini-scores");
+      const publicPodiumCards = document.getElementById("public-podium-cards");
+
+      function render(state) {
+        if (state.state === "BUZZED" && state.currentTeam !== null) {
+          viewIdle.style.display = "none";
+          viewPodium.style.display = "none";
+          viewBuzzed.style.display = "flex";
+
+          const team = state.equipes[state.currentTeam];
+          const gradientCss = hub.getTeamGradientCss(state.currentTeam);
+          const fullLabel = hub.getTeamFullLabel(state.currentTeam);
+
+          const publicPaletteDesc = document.getElementById("public-palette-desc");
+          if (publicPaletteDesc) {
+            publicPaletteDesc.textContent = fullLabel;
+          }
+
+          publicTeamName.textContent = team ? team.nom : `ÉQUIPE ${state.currentTeam + 1}`;
+          publicTeamName.style.background = gradientCss;
+          publicTeamName.classList.add("multi-color-text");
+
+          publicHalo.style.background = gradientCss;
+          publicHalo.classList.add("multi-color-glow");
+          publicHalo.style.opacity = "0.65";
+
+          // Chrono optionnel ou temps libre
+          if (state.chrono.enabled) {
+            publicTimer.textContent = state.chrono.remaining;
+            if (state.chrono.remaining <= 3 && state.chrono.remaining > 0) {
+              publicTimer.classList.add("urgent");
+            } else {
+              publicTimer.classList.remove("urgent");
+            }
+          } else {
+            publicTimer.textContent = `⏱️ +${state.chrono.elapsed || 0}s`;
+            publicTimer.classList.remove("urgent");
+          }
+        }
+        else if (state.state === "FINISHED") {
+          viewIdle.style.display = "none";
+          viewBuzzed.style.display = "none";
+          viewPodium.style.display = "flex";
+          publicHalo.classList.remove("multi-color-glow");
+          publicHalo.style.background = "#FBBF24";
+          publicHalo.style.opacity = "0.4";
+
+          const sorted = [...state.equipes].sort((a, b) => b.score - a.score);
+          publicPodiumCards.innerHTML = "";
+
+          // Ordre podium : 2eme (gauche), 1er (centre/haut), 3eme (droite)
+          const podiumOrder = [
+            { place: "2ème", rank: 1, height: "240px", bg: "#94A3B8" },
+            { place: "1er", rank: 0, height: "320px", bg: "var(--color-gold)" },
+            { place: "3ème", rank: 2, height: "180px", bg: "#D97706" }
+          ];
+
+          podiumOrder.forEach(slot => {
+            const team = sorted[slot.rank];
+            if (!team) return;
+            const card = document.createElement("div");
+            card.style.flex = "1";
+            card.style.height = slot.height;
+            card.style.background = "rgba(255, 255, 255, 0.05)";
+            card.style.border = `2px solid ${slot.bg}`;
+            card.style.borderRadius = "16px";
+            card.style.display = "flex";
+            card.style.flexDirection = "column";
+            card.style.justifyContent = "center";
+            card.style.alignItems = "center";
+            card.style.boxShadow = `0 0 40px ${slot.bg}33`;
+
+            card.innerHTML = `
+              <div style="font-size: 1.6rem; font-weight: 900; color: ${slot.bg}; margin-bottom: 6px;">${slot.place}</div>
+              <div style="font-size: 2rem; font-weight: 800; margin-bottom: 6px;">${team.nom}</div>
+              <div class="mono" style="font-size: 2.5rem; font-weight: 900; color: ${slot.bg};">${team.score} PTS</div>
+            `;
+            publicPodiumCards.appendChild(card);
+          });
+        }
+        else {
+          // IDLE
+          viewIdle.style.display = "flex";
+          viewBuzzed.style.display = "none";
+          viewPodium.style.display = "none";
+          publicHalo.style.setProperty("--public-glow", "#8B5CF6");
+          publicHalo.style.opacity = "0.2";
+
+          // Affichage miniature des scores
+          publicMiniScores.innerHTML = "";
+          state.equipes.forEach(eq => {
+            const pill = document.createElement("div");
+            pill.style.padding = "8px 16px";
+            pill.style.borderRadius = "999px";
+            pill.style.background = "rgba(255, 255, 255, 0.05)";
+            pill.style.border = "1px solid rgba(255, 255, 255, 0.1)";
+            pill.style.display = "flex";
+            pill.style.gap = "8px";
+            pill.style.alignItems = "center";
+            pill.innerHTML = `
+              <span style="font-weight: 600; font-size: 0.95rem;">${eq.nom}</span>
+              <span class="mono" style="color: var(--color-gold); font-weight: 800; font-size: 1rem;">${eq.score}</span>
+            `;
+            publicMiniScores.appendChild(pill);
+          });
+        }
+      }
+
+      document.getElementById("btn-fs").onclick = () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      };
+
+      hub.subscribe(render);
+    })();
+  </script>
+</body>
+</html>

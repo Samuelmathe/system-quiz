@@ -96,3 +96,16 @@ La Mega envoie toujours le **numéro d’équipe 1…30** dans le payload radio 
 Pas de branchement simultané Mega + nano son sur le même PC.
 
 Pour lancer l’interface et les prérequis Python, voir le [README](README.md).
+
+---
+
+## Architecture de secours : équipes/animateur en ESP32 + ESP-NOW (sans nRF24)
+
+**Uniquement pour l'architecture ESP32 hub** (`esp32/esp32_bridge_server.ino`, qui remplace le RF-Nano). Ne concerne pas `rf_nano_bridge.ino` / `megaf.ino`.
+
+Historique de fiabilité nRF24 sur ce projet (gel intermittent diagnostiqué puis corrigé, bug de stress-test) : si un module nRF24 pose problème sur site, `esp32_buzzer_equipe.ino` et `esp32_animateur.ino` permettent de remplacer **un boîtier à la fois** (Nano+nRF24 → ESP32) sans toucher au hub ni aux autres boîtiers.
+
+- **Un seul hub, deux transports simultanés** : le hub écoute nRF24 **et** ESP-NOW en même temps (`traiterMessageRadio()` dans `esp32_bridge_server.ino`), avec le **même** `RadioMsg{kind,value,seq}`, le **même** dédoublonnage par `seq`, la **même** fenêtre d'arbitrage de 50ms. Une équipe peut être en nRF24 pendant qu'une autre est en ESP-NOW.
+- **Canal Wi-Fi fixe obligatoire** (`ESPNOW_WIFI_CHANNEL`, 6 par défaut) : à garder identique dans les **trois** fichiers (`esp32_bridge_server.ino`, `esp32_buzzer_equipe.ino`, `esp32_animateur.ino`). ESP-NOW exige que l'émetteur et le récepteur soient sur le même canal ; le hub le fixe via `WiFi.softAP(..., ESPNOW_WIFI_CHANNEL)`, changez cette valeur partout si le canal 6 est pollué sur le lieu de l'événement.
+- **Broadcast, aucun appairage MAC** : plus simple à déployer en urgence (remplacer un boîtier en quelques secondes), au prix de l'absence d'accusé de réception matériel pour le broadcast (contrairement au nRF24 avec `setAutoAck`). Compensé par une **rafale de 4 copies** espacées de 12ms (`BURST_COUNT`/`BURST_GAP_MS`), même principe que la rafale son déjà utilisée dans ce projet — le hub dédoublonne par `seq`, donc les copies en trop ne créent jamais de buzz en double.
+- **Consommation** : le Wi-Fi tire plus de courant que le nRF24 — moins d'autonomie si les boîtiers équipes sont sur pile plutôt que secteur/USB.
