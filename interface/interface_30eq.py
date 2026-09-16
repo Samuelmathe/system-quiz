@@ -1114,10 +1114,14 @@ class QuizController:
                 ports.append((device, display_name))
             
             ports.sort(key=lambda x: x[1])
-            
+
         except Exception as e:
-            self.add_log(f"Erreur scan ports: {e}", color=[255, 0, 0])
-        
+            # Pas d'appel dpg.* ici : cette methode peut tourner hors du
+            # thread principal (scan en arriere-plan, voir refresh_ports_callback).
+            # Le message clair a l'utilisateur est affiche par l'appelant
+            # (liste vide -> "Aucun port detecte").
+            self._last_scan_error = str(e)
+
         return ports
     
     def _drain_serial_queues(self) -> None:
@@ -1301,6 +1305,18 @@ class QuizController:
                 if dpg.does_item_exist("btn_connect"):
                     dpg.configure_item("btn_connect", enabled=True)
                 self.add_log(f"Erreur connexion: {msg}", color=[255, 0, 0])
+            elif kind == "ports_scanned":
+                _, ports = evt
+                self._ports_scanning = False
+                if dpg.does_item_exist("btn_refresh_ports"):
+                    dpg.configure_item("btn_refresh_ports", enabled=True)
+                if ports:
+                    display_names = [name for _, name in ports]
+                    dpg.configure_item("combo_serial_ports", items=display_names)
+                    self.add_log(f"{len(ports)} ports detectes", color=[0, 255, 0])
+                else:
+                    dpg.configure_item("combo_serial_ports", items=["AUCUN PORT"])
+                    self.add_log("Aucun port detecte", color=[255, 0, 0])
 
     def _serial_listener_worker(self):
         buffer = b""
@@ -1448,7 +1464,7 @@ class QuizController:
                     width=300,
                     default_value="Selectionnez port COM..."
                 )
-                dpg.add_button(label="Actualiser", callback=self.refresh_ports_callback, width=80)
+                dpg.add_button(label="Actualiser", tag="btn_refresh_ports", callback=self.refresh_ports_callback, width=80)
                 dpg.add_button(label="CONNECTER", tag="btn_connect", callback=self.connect_callback, width=100)
                 dpg.add_text("", tag="txt_connection_status", color=[255, 50, 50])
             dpg.add_checkbox(
@@ -1886,14 +1902,22 @@ class QuizController:
             self.update_podium_display()
     
     def refresh_ports_callback(self, sender, app_data):
+        # Scan en arriere-plan : serial.tools.list_ports.comports() peut se
+        # bloquer plusieurs secondes quand le Bluetooth est actif (ports
+        # virtuels cu.Bluetooth-Incoming-Port / rfcomm), ce qui gelait toute
+        # l'interface Dear PyGui pendant le scan (thread principal).
+        if getattr(self, "_ports_scanning", False):
+            return
+        self._ports_scanning = True
+        if dpg.does_item_exist("btn_refresh_ports"):
+            dpg.configure_item("btn_refresh_ports", enabled=False)
+        self.add_log("Scan des ports en cours...", color=[150, 150, 150])
+        threading.Thread(target=self._scan_ports_worker, daemon=True).start()
+
+    def _scan_ports_worker(self):
+        """Tourne hors du thread principal : aucun appel dpg.* ici."""
         ports = self.scan_serial_ports()
-        if ports:
-            display_names = [name for _, name in ports]
-            dpg.configure_item("combo_serial_ports", items=display_names)
-            self.add_log(f"{len(ports)} ports detectes", color=[0, 255, 0])
-        else:
-            dpg.configure_item("combo_serial_ports", items=["AUCUN PORT"])
-            self.add_log("Aucun port detecte", color=[255, 0, 0])
+        self._serial_ctrl_queue.put(("ports_scanned", ports))
     
     def connect_callback(self, sender, app_data):
         selected = dpg.get_value("combo_serial_ports")

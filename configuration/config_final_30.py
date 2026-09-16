@@ -43,16 +43,38 @@ def drain_ui_queue():
         except Exception:
             pass
 
+# VID USB connus des adaptateurs Arduino/USB-série (même liste que interface_30eq.py)
+KNOWN_ARDUINO_VIDS = [0x2341, 0x2A03, 0x1A86, 0x10C4, 0x0403]
+
 def get_clean_ports():
-    """Scanne les ports USB sur Windows, Mac et Linux."""
-    all_ports = serial.tools.list_ports.comports()
+    """Scanne les ports USB sur Windows, Mac et Linux, en filtrant les faux
+    positifs Bluetooth (cu.Bluetooth-Incoming-Port, cu.MALS, description
+    contenant BLUETOOTH/INCOMING-PORT) qui perturbent la detection sous
+    Mac/Linux, et en priorisant les VID Arduino connus."""
+    try:
+        all_ports = serial.tools.list_ports.comports()
+    except Exception as e:
+        # Ne jamais bloquer l'interface si la detection echoue
+        return [f"ERREUR SCAN PORTS : {e}"]
+
     clean_list = []
+    ftdi_sans_driver_suspect = False
+    aucune_carte_trouvee = True
+
     for p in all_ports:
-        desc = p.description.upper()
+        desc = (p.description or "").upper()
         device = p.device
+        hwid = (p.hwid or "").upper()
+        vid = p.vid
 
         # Détection USB par description
         is_usb = any(k in desc for k in ["USB", "ARDUINO", "CH340", "CP210", "FTDI", "UART", "SERIAL"])
+
+        # Priorité aux VID Arduino/USB-série connus (plus fiable que la description)
+        if vid in KNOWN_ARDUINO_VIDS:
+            is_usb = True
+        if any(f"VID_{v:04X}" in hwid for v in KNOWN_ARDUINO_VIDS):
+            is_usb = True
 
         # Mac : /dev/cu.usbserial ou /dev/cu.usbmodem
         if device.startswith("/dev/cu.usbserial") or device.startswith("/dev/cu.usbmodem"):
@@ -62,22 +84,87 @@ def get_clean_ports():
         if device.startswith("/dev/ttyUSB") or device.startswith("/dev/ttyACM"):
             is_usb = True
 
-        # Exclusions Mac Bluetooth et ports internes
-        if device.startswith("/dev/cu.Bluetooth") or device.startswith("/dev/cu.MALS"):
+        # Exclusions Bluetooth : chemins Mac connus ET description (couvre
+        # aussi les ports virtuels Bluetooth qui n'utilisent pas ces chemins,
+        # ex. certains rfcomm Linux ou nouveaux noms macOS)
+        is_bluetooth = (
+            device.startswith("/dev/cu.Bluetooth")
+            or device.startswith("/dev/cu.MALS")
+            or "BLUETOOTH" in desc
+            or "INCOMING-PORT" in desc
+        )
+        if is_bluetooth:
+            is_usb = False
+
+        # Windows : COM1 est quasi toujours un port systeme, jamais l'Arduino
+        if device.upper() == "COM1":
             is_usb = False
 
         if is_usb:
             clean_list.append(f"{device} (USB)")
+            aucune_carte_trouvee = False
+        elif is_bluetooth:
+            clean_list.append(f"{device} (Bluetooth - ignore)")
         else:
             clean_list.append(f"{device} (Interne)")
 
-    return clean_list if clean_list else ["AUCUN PORT DÉTECTÉ"]
+        # Carte FTDI visible par description mais VID inattendu -> pilote
+        # VCP probablement absent (frequent sur macOS recent)
+        if "FTDI" in desc and vid != 0x0403:
+            ftdi_sans_driver_suspect = True
+
+    if not clean_list:
+        return ["AUCUN PORT DÉTECTÉ"]
+
+    # schedule_ui() : get_clean_ports() peut tourner hors du thread principal
+    # (scan en arriere-plan, voir refresh_ports()) -> jamais de dpg.* direct ici.
+    if ftdi_sans_driver_suspect:
+        schedule_ui(lambda: log(
+            "Carte FTDI detectee sans VID standard : installer le pilote FTDI VCP si la connexion echoue.",
+            color=[255, 200, 0]))
+    elif aucune_carte_trouvee:
+        schedule_ui(lambda: log(
+            "Aucune carte Arduino/USB-serie detectee : verifier le cable, ou installer le pilote "
+            "(FTDI VCP / CH340 / CP210x selon l'adaptateur, frequent sur macOS recent).",
+            color=[255, 200, 0]))
+
+    return clean_list
 
 def log(message, color=[255, 255, 255]):
     if dpg.does_item_exist("log_list"):
         timestamp = datetime.now().strftime("%H:%M:%S")
         dpg.add_text(f"[{timestamp}] {message}", parent="log_list", color=color)
         dpg.set_y_scroll("log_child", dpg.get_y_scroll_max("log_child") + 50)
+
+_ports_scanning = False
+
+def refresh_ports():
+    """Scanne les ports en arriere-plan : serial.tools.list_ports.comports()
+    peut se bloquer plusieurs secondes quand le Bluetooth est actif (ports
+    virtuels cu.Bluetooth-Incoming-Port / rfcomm), ce qui gelait toute
+    l'interface Dear PyGui pendant le scan (thread principal)."""
+    global _ports_scanning
+    if _ports_scanning:
+        return
+    _ports_scanning = True
+    if dpg.does_item_exist("btn_refresh_ports"):
+        dpg.configure_item("btn_refresh_ports", enabled=False)
+
+    def worker():
+        global _ports_scanning
+        ports = get_clean_ports()
+
+        def apply():
+            global _ports_scanning
+            _ports_scanning = False
+            if dpg.does_item_exist("btn_refresh_ports"):
+                dpg.configure_item("btn_refresh_ports", enabled=True)
+            if dpg.does_item_exist("port_combo"):
+                dpg.configure_item("port_combo", items=ports)
+
+        schedule_ui(apply)
+
+    threading.Thread(target=worker, daemon=True).start()
 
 # Profil de canaux par defaut pour un nouveau projecteur -- chaque
 # projecteur garde desormais son PROPRE reglage (voir migration ci-dessous),
@@ -337,6 +424,9 @@ def toggle_connection():
         if "Interne" in brut:
             log("Port systeme bloque.", color=[255, 150, 0])
             return
+        if "Bluetooth" in brut:
+            log("Port Bluetooth ignore (ce n'est pas l'Arduino).", color=[255, 150, 0])
+            return
 
         port_final = None
 
@@ -427,7 +517,7 @@ def setup_ui():
         # --- CONNEXION ---
         with dpg.group(horizontal=True):
             dpg.add_combo(items=get_clean_ports(), tag="port_combo", width=340, default_value="SELECTIONNEZ PORT USB")
-            dpg.add_button(label="ACTUALISER", width=100, callback=lambda: dpg.configure_item("port_combo", items=get_clean_ports()))
+            dpg.add_button(label="ACTUALISER", tag="btn_refresh_ports", width=100, callback=lambda: refresh_ports())
             status_label = "DECONNECTER" if (ser and ser.is_open) else "CONNECTER"
             dpg.add_button(label=status_label, tag="btn_conn", callback=toggle_connection, width=150)
             dpg.bind_item_theme("btn_conn", "vert_theme" if (ser and ser.is_open) else "bleu_theme")
