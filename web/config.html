@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080B11">
+  <script>(function(){try{var t=localStorage.getItem("quiz_dmx_theme");if(t!=="light"&&t!=="dark"){t=(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+  <title>Régie Technique — Configuration DMX & Matériel</title>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- En-tête Régie Technique -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="status-dot" id="conn-dot"></div>
+      <span class="brand-gradient">RÉGIE TECHNIQUE DMX</span>
+      <span class="badge" style="background: rgba(139, 92, 246, 0.15); color: var(--gemini-purple); border-color: rgba(139, 92, 246, 0.3);">
+        Accès Réservé
+      </span>
+    </div>
+    <div class="header-meta">
+      <button class="btn btn-subtle" id="btn-export-json">Exporter JSON</button>
+      <button class="btn btn-subtle" id="btn-import-json">Charger JSON</button>
+      <input type="file" id="input-import-file" accept=".json" hidden>
+      <button class="btn btn-primary" id="btn-sync-mega">
+        ⚡ Synchroniser la Mega
+      </button>
+    </div>
+  </header>
+
+  <main class="config-layout">
+
+    <!-- Section 1 : Paramètres du Chronomètre (Optionnel & Réglable) -->
+    <section class="glass-panel" style="padding: 24px;">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">
+            <span>⏱️ Chronomètre des Questions</span>
+            <span class="badge" id="badge-chrono-mode" style="color: var(--color-success);">Actif</span>
+          </h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Le chronomètre est optionnel : activez-le ou laissez le temps libre pour les questions sans limite.
+          </p>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px; align-items: center; margin-top: 10px;">
+        <!-- Toggle Actif / Libre -->
+        <div style="display: flex; align-items: center; gap: 14px; background: var(--bg-input); padding: 14px 18px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle);">
+          <label class="switch-toggle">
+            <input type="checkbox" id="chk-chrono-active" checked>
+            <span class="switch-slider"></span>
+          </label>
+          <div>
+            <div style="font-weight: 700; font-size: 0.95rem;" id="txt-chrono-toggle-label">Chronomètre Activé</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary);">Désactiver pour un temps libre</div>
+          </div>
+        </div>
+
+        <!-- Durée réglable en secondes -->
+        <div class="field-group" id="grp-chrono-duration">
+          <label>Durée du compte à rebours (secondes)</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="number" id="input-chrono-sec" min="5" max="300" value="30" style="font-weight: 700; font-family: var(--font-mono); font-size: 1.1rem; width: 90px; text-align: center;">
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-subtle" data-preset="15" style="padding: 6px 10px; font-size: 0.8rem;">15s</button>
+              <button class="btn btn-subtle" data-preset="20" style="padding: 6px 10px; font-size: 0.8rem;">20s</button>
+              <button class="btn btn-subtle" data-preset="30" style="padding: 6px 10px; font-size: 0.8rem;">30s</button>
+              <button class="btn btn-subtle" data-preset="45" style="padding: 6px 10px; font-size: 0.8rem;">45s</button>
+              <button class="btn btn-subtle" data-preset="60" style="padding: 6px 10px; font-size: 0.8rem;">60s</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Option Timeout = Faux -->
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <input type="checkbox" id="chk-timeout-faux" checked style="width: 20px; height: 20px; cursor: pointer;">
+          <label for="chk-timeout-faux" style="font-size: 0.85rem; cursor: pointer; color: var(--text-secondary);">
+            Temps écoulé = Mauvaise réponse automatique
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2 : Projecteurs DMX en COLONNE (100% visible, anti-chevauchement) -->
+    <section class="glass-panel" style="padding: 24px;">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">
+            <span>💡 Projecteurs DMX</span>
+            <span class="badge mono" id="badge-fixtures-count">2 projecteurs</span>
+          </h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Configuration verticale claire de chaque projecteur (adresses DMX512, canaux, modes et offsets).
+          </p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-fixture">+ Ajouter un projecteur</button>
+      </div>
+
+      <!-- Liste empilée en COLONNE pour une visibilité totale sans superposition -->
+      <div class="fixtures-column-list" id="fixtures-column-list">
+        <!-- Rendu dynamique en colonne -->
+      </div>
+    </section>
+
+    <!-- Section 3 : Équipes & Couleurs DMX (1 couleur par projecteur DMX) -->
+    <section class="glass-panel" style="padding: 24px;">
+      <div class="section-header">
+        <div>
+          <h2 class="section-title">
+            <span>👥 Équipes & Couleurs DMX Scène</span>
+            <span class="badge mono" id="badge-equipes-count">6 équipes</span>
+          </h2>
+          <p style="color: var(--text-secondary); font-size: 0.9rem;">
+            Chaque projecteur DMX physique possède sa couleur dédiée par équipe (synchronisée dans l'EEPROM de la Mega).
+          </p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-subtle" id="btn-remove-team">− Supprimer Équipe</button>
+          <button class="btn btn-primary" id="btn-add-team">+ Ajouter Équipe</button>
+        </div>
+      </div>
+
+      <div id="teams-palettes-container" style="display: flex; flex-direction: column; gap: 14px;">
+        <!-- Rendu dynamique des équipes : 1 couleur par projecteur DMX branché -->
+      </div>
+    </section>
+
+    <!-- Section 4 : Journal de Diagnostic / Logs -->
+    <section class="glass-panel" style="padding: 20px;">
+      <div class="section-header" style="margin-bottom: 10px;">
+        <h3 style="font-size: 1.1rem; color: var(--text-secondary);">Logs & Diagnostics Série</h3>
+        <button class="btn btn-subtle" id="btn-clear-logs" style="font-size: 0.75rem;">Effacer</button>
+      </div>
+      <div id="logs-console" class="mono" style="background: rgba(0,0,0,0.5); padding: 12px; border-radius: var(--radius-sm); font-size: 0.8rem; height: 130px; overflow-y: auto; color: var(--gemini-cyan); border: 1px solid var(--border-subtle);">
+        [00:00:00] Système prêt. En attente de commande.
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL EXPORT JSON -->
+  <div class="modal-backdrop" id="modal-export" style="display: none;">
+    <div class="modal-content glass-panel" style="max-width: 600px;">
+      <h3 style="margin-bottom: 8px;">Configuration JSON</h3>
+      <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 12px;">
+        Copiez cette configuration pour la sauvegarder ou l'intégrer à un autre appareil.
+      </p>
+      <textarea id="textarea-export" class="mono" style="width: 100%; height: 260px; background: rgba(0,0,0,0.6); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: #fff; padding: 10px; font-size: 0.8rem; resize: vertical;" readonly></textarea>
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px;">
+        <button class="btn btn-subtle" id="btn-close-export-modal">Fermer</button>
+        <button class="btn btn-primary" id="btn-copy-export">Copier dans le presse-papier</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app-common.js"></script>
+  <script src="config.js"></script>
+</body>
+</html>

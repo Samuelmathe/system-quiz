@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#080B11">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <script>(function(){try{var t=localStorage.getItem("quiz_dmx_theme");if(t!=="light"&&t!=="dark"){t=(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+  <title>Quiz Master — Télécommande Animateur</title>
+  
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+  <script src="vendor/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- En-tête Animateur -->
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="status-dot" id="conn-dot"></div>
+      <span class="brand-gradient">QUIZ MASTER</span>
+    </div>
+    <div class="header-meta">
+      <span class="badge" id="badge-status">Attente</span>
+      <button class="btn btn-subtle" id="btn-settings-toggle" title="Paramètres Wi-Fi" aria-label="Paramètres">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      </button>
+      <button class="btn btn-subtle" id="btn-fullscreen" title="Plein Écran" aria-label="Plein écran">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="animator-layout">
+
+    <!-- HERO BUZZ ZONE (L'écran principal de l'animateur) -->
+    <section class="buzz-hero glass-panel" id="buzz-hero">
+      
+      <div class="buzz-status-pill" id="buzz-status-text">EN ATTENTE D'UN BUZZ</div>
+      
+      <!-- Numéro d'équipe et description des couleurs de la palette (ex: 1 • Rouge / Bleu) -->
+      <div id="buzz-team-palette-label" style="font-size: 1.15rem; font-weight: 800; text-transform: uppercase; letter-spacing: 1.5px; margin-top: 10px; margin-bottom: 2px; color: rgba(255,255,255,0.9); text-shadow: 0 2px 10px rgba(0,0,0,0.5); display: none;"></div>
+
+      <!-- Nom de l'équipe en grand format -->
+      <h1 class="buzz-team-title" id="buzz-team-name">—</h1>
+      
+      <!-- Compte à rebours géant -->
+      <div class="buzz-timer mono" id="buzz-timer-display">--:--</div>
+
+      <!-- Boutons géants au pouce (Visibles lors d'un buzz) -->
+      <div class="buzz-action-row" id="buzz-action-row" style="display: none;">
+        <button class="btn-verdict btn-valider" id="btn-valider">
+          <span>VALIDER</span>
+          <span class="sub" id="btn-valider-sub">+1 POINT</span>
+        </button>
+        <button class="btn-verdict btn-refuser" id="btn-refuser">
+          <span>REFUSER</span>
+          <span class="sub">FAUX</span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- Barre d'ajustement rapide de la manche -->
+    <div class="glass-panel quick-settings-bar">
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span style="font-size: 0.85rem; color: var(--text-secondary);">Valeur Question :</span>
+        <div class="valeur-points-badge">
+          <button class="btn-mini-counter" id="btn-pts-minus">−</button>
+          <span class="mono" style="font-size: 1.1rem; font-weight: 800; min-width: 24px; text-align: center;" id="display-pts-valeur">1</span>
+          <button class="btn-mini-counter" id="btn-pts-plus">+</button>
+        </div>
+      </div>
+
+      <!-- Réglage rapide du Chrono (Optionnel & Réglable en 1 clic) -->
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="btn btn-subtle" id="btn-toggle-chrono" style="padding: 6px 12px; font-size: 0.8rem; border: 1px solid var(--border-subtle);" title="Cliquer pour changer : 15s ➔ 30s ➔ 45s ➔ Temps Libre">
+          ⏱️ <span id="txt-chrono-btn-label">Chrono : 30s</span>
+        </button>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <!-- Simulation de buzz au cas où un buzzer est en panne -->
+        <button class="btn btn-subtle" id="btn-manual-buzz" style="font-size: 0.8rem;">
+          ⚡ Buzz manuel
+        </button>
+        <button class="btn btn-subtle" id="btn-reset-scores" style="font-size: 0.8rem; color: var(--color-danger);" title="Remettre tous les scores à 0">
+          🔄 Reset scores
+        </button>
+        <button class="btn btn-subtle" id="btn-end-game" style="font-size: 0.8rem; color: var(--color-warning);">
+          Clôturer
+        </button>
+      </div>
+    </div>
+
+    <!-- Panneau des questions (Optionnel / Déroulable) -->
+    <section class="glass-panel" style="padding: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span class="badge" id="q-counter">Question 0 / 0</span>
+        <label class="btn btn-subtle" style="font-size: 0.75rem; cursor: pointer;">
+          Importer Excel/CSV
+          <input type="file" id="input-excel-file" accept=".xlsx,.xls,.csv" hidden>
+        </label>
+      </div>
+      
+      <div id="q-text-display" style="font-size: 1.05rem; font-weight: 600; min-height: 48px; margin: 10px 0; color: var(--text-primary);">
+        Préparez la première question...
+      </div>
+
+      <div id="q-answer-box" style="display: none; padding: 10px; border-radius: var(--radius-sm); background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2); color: var(--color-success); font-weight: 600; font-size: 0.95rem; margin-bottom: 12px;">
+        Réponse : <span id="q-answer-text"></span>
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button class="btn btn-subtle" id="btn-q-prev" style="flex: 1;">◂ Précédente</button>
+        <button class="btn btn-subtle" id="btn-q-reveal" style="flex: 1;">👁️ Réponse</button>
+        <button class="btn btn-subtle" id="btn-q-next" style="flex: 1;">Suivante ▸</button>
+      </div>
+    </section>
+
+    <!-- Grille tactile des scores des équipes -->
+    <section>
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 style="font-size: 1.1rem;">Équipes & Scores</h3>
+        <span class="mono" style="font-size: 0.85rem; color: var(--text-muted);" id="teams-count-badge">6 équipes</span>
+      </div>
+      
+      <div class="teams-grid" id="teams-grid-container">
+        <!-- Généré dynamiquement en JS -->
+      </div>
+    </section>
+
+  </main>
+
+  <!-- PODIUM OVERLAY (S'affiche à la fin de la partie) -->
+  <div class="modal-backdrop" id="modal-podium" style="display: none;">
+    <div class="modal-content glass-panel" style="text-align: center; max-width: 480px;">
+      <div style="font-size: 2.5rem; margin-bottom: 10px;">🏆</div>
+      <h2 style="font-size: 1.8rem; margin-bottom: 6px;">Classement Final</h2>
+      <p style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 24px;">La manche est terminée !</p>
+
+      <div id="podium-ranking-list" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px;">
+        <!-- Liste dynamique 1er, 2e, 3e... -->
+      </div>
+
+      <div style="display: flex; gap: 12px;">
+        <button class="btn btn-subtle" id="btn-podium-restart" style="flex: 1;">Réinitialiser</button>
+        <button class="btn btn-primary" id="btn-podium-continue" style="flex: 1;">Continuer le jeu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL CONFIGURATION IP (Discret) -->
+  <div class="modal-backdrop" id="modal-settings" style="display: none;">
+    <div class="modal-content glass-panel">
+      <h3 style="margin-bottom: 12px;">Paramètres de Connexion</h3>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+        Adresse IP de l'ESP32 sur le réseau Wi-Fi :
+      </p>
+      <div class="field-group">
+        <input type="text" id="input-esp-ip" value="192.168.4.1" placeholder="192.168.4.1">
+      </div>
+
+      <div style="height: 1px; background: var(--border-subtle); margin: 20px 0;"></div>
+
+      <h3 style="margin-bottom: 8px;">Sons personnalisés</h3>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 12px;">
+        Sélectionnez vos fichiers audio (même convention de noms que le logiciel PC) :
+        <code>buzz.mp3</code>, <code>victoire.mp3</code>, <code>echec.mp3</code>,
+        <code>equipe_1.mp3</code> … <code>equipe_N.mp3</code> (le numéro d'équipe dans le nom).
+        Rechargés à chaque ouverture de la page (non sauvegardés sur l'appareil).
+      </p>
+      <div class="field-group">
+        <label>Choisir un dossier entier (PC, Android, iPhone/iPad récent)</label>
+        <input type="file" id="input-sons-dossier" accept="audio/*" multiple webkitdirectory>
+      </div>
+      <div class="field-group">
+        <label>Ou choisir des fichiers un par un (si le dossier ne fonctionne pas sur votre appareil)</label>
+        <input type="file" id="input-sons-fichiers" accept="audio/*" multiple>
+      </div>
+      <div id="txt-sons-status" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 6px;"></div>
+
+      <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-subtle" id="btn-modal-close">Annuler</button>
+        <button class="btn btn-primary" id="btn-modal-save">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app-common.js"></script>
+  <script src="animateur.js"></script>
+</body>
+</html>
