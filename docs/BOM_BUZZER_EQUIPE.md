@@ -90,7 +90,17 @@ Câblage simplifié (identique sur les deux cartes) :
 
 ---
 
+## Assemblage : connecteurs, pas de soudure directe
+
+- **Nano, nRF24, et le module ESP32** se montent sur des **connecteurs/headers femelles** soudés sur le PCB — pas soudés directement. Facilite le remplacement en cas de panne d'un module.
+- **Condensateurs et résistances** : mix CMS (montés en machine ou à la pince) et traversants (soudés à la main) selon ce qui est disponible/pratique.
+- **Batterie** : câblée directement (soudée), logée dans son propre compartiment du boîtier (voir ci-dessous).
+
 ## Ce que ça implique pour le boîtier 3D
 
-- **Carte ESP32** : batterie ~2x plus grosse (1000-1200 mAh vs 500-600 mAh) → boîtier plus épais/large sur cette variante. Les deux boîtiers ne pourront pas avoir exactement le même gabarit si on garde ce dimensionnement.
-- Prévoir un accès externe au port USB-C (charge) et à l'interrupteur sur la coque, sans avoir à l'ouvrir.
+Boîtier en **deux étages démontables indépendamment** (voir `hardware/boitier_buzzer_equipe.scad`, rendu et vérifié avec OpenSCAD) :
+- **Étage du haut** : PCB + connecteurs + modules, fermé par un couvercle avec le trou du bouton BUZZ. C'est là que sont câblés les headers.
+- **Étage du bas** : compartiment batterie séparé, avec sa propre trappe — on peut changer/recharger la batterie sans démonter l'électronique du dessus.
+- Une étagère interne sépare les deux, avec une fente de passage pour les fils d'alimentation.
+- **Carte ESP32** : batterie ~2x plus grosse (1000-1200 mAh vs 500-600 mAh) → empreinte au sol différente entre les deux variantes (52×28mm de carte ESP32 confirmés par la fiche produit, contre la Nano+nRF24 plus compacte).
+- Accès externe prévu au port USB-C (charge, sur l'étage batterie) et à l'interrupteur (sur l'étage PCB), sans avoir à ouvrir les couvercles.

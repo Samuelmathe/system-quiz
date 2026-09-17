@@ -1,13 +1,24 @@
 // ==========================================================================
 // BOÎTIER BUZZER ÉQUIPE — paramétrique, 2 variantes (Nano+nRF24 / ESP32)
+// Architecture 2 étages démontables : étage PCB (modules sur connecteurs
+// femelles) en haut avec le bouton, étage batterie en dessous avec sa
+// propre trappe — accès à la batterie sans démonter l'électronique.
 // ==========================================================================
-// Basé sur docs/BOM_BUZZER_EQUIPE.md. TOUTES les dimensions ci-dessous sont
-// des valeurs TYPIQUES de composants courants, PAS des mesures faites sur
-// votre matériel réel — mesurez vos modules exacts (pied à coulisse) et
-// ajustez les variables avant impression. Je n'ai pas pu faire rendre ce
-// fichier par OpenSCAD dans cet environnement (pas d'accès root pour
-// l'installer) : relisez/ouvrez-le dans OpenSCAD avant de lancer une
-// impression, ne faites pas confiance au fichier les yeux fermés.
+// Basé sur docs/BOM_BUZZER_EQUIPE.md. Dimensions ESP32 (51,45 x 23,37mm,
+// pas 2,54mm, entraxe rangées 22,86mm) vérifiées par recherche web pour un
+// DOIT ESP32 DevKit V1 30 broches typique -- À REMESURER sur la carte
+// réellement reçue (les clones varient). Dimensions Nano/nRF24/batterie
+// toujours approximatives (voir BOM), à ajuster aussi.
+//
+// Modules montés sur connecteurs femelles (pas soudés directement) : la
+// hauteur "hauteur_headers" ci-dessous doit couvrir header femelle +
+// épaisseur du module + ses propres composants en hauteur.
+//
+// Je n'ai pas d'accès root dans cet environnement pour garder OpenSCAD
+// installé en permanence : ce fichier a été rendu et vérifié (géométrie
+// valide, "Simple: yes") au moment de l'écrire, mais RELISEZ-le et
+// ouvrez-le vous-même dans OpenSCAD avant impression -- ne faites pas
+// confiance au fichier les yeux fermés.
 //
 // Utilisation :
 //   1. Ouvrez ce fichier dans OpenSCAD.
@@ -19,40 +30,51 @@
 VARIANTE = "nano"; // "nano" ou "esp32"
 
 // ---- PARAMÈTRES GÉNÉRAUX (communs aux deux variantes) ----
-epaisseur_paroi   = 2.0;   // épaisseur des parois imprimées
-jeu               = 0.3;   // jeu (clearance) autour des composants, par côté
-hauteur_interieure = 14;   // hauteur utile intérieure (au-dessus du PCB) pour loger batterie + composants empilés
+epaisseur_paroi  = 2.0;   // épaisseur des parois imprimées
+jeu              = 0.5;   // jeu (clearance) autour des composants, par côté
+hauteur_headers  = 14;    // au-dessus du plancher PCB : header femelle + module + ses composants
+hauteur_shelf    = 1.6;   // épaisseur de l'étagère qui sépare étage PCB / étage batterie
 
-// Carte électronique (approximatif — voir docs/BOM_BUZZER_EQUIPE.md)
-pcb_largeur_nano  = 20;    // Nano ~18mm + marge de découpe PCB
-pcb_longueur_nano = 45;    // Nano ~43mm + marge
-pcb_largeur_esp32 = 27;    // ESP32 Dev Module ~25mm + marge
-pcb_longueur_esp32 = 50;   // ESP32 Dev Module ~48mm + marge
+// Empreinte de l'étage PCB (modules + connecteurs, côte à côte) -- voir
+// note de dimensions ESP32 ci-dessus pour la variante "esp32"
+pcb_largeur_nano   = 38;  // Nano (~18mm large) + nRF24 (~15mm) côte à côte + marge
+pcb_longueur_nano  = 48;  // le plus long des deux modules (Nano ~43mm) + marge
+// ESP32-DevKitC-32 (CH340C, USB-C) : dimensions CONFIRMEES par la fiche
+// produit du modele envisage cote equipe -- 52 x 28mm, ~9.5g. Marge de
+// degagement ajoutee pour le connecteur/les pattes de header.
+pcb_largeur_esp32  = 34;  // 28mm de large + degagement
+pcb_longueur_esp32 = 58;  // 52mm de long + marge
 
 // Batterie LiPo (approximatif — À REMESURER sur la cellule réellement achetée)
-batterie_nano_l   = 30;    // 500-600 mAh, typique
+batterie_nano_l   = 30;   // 500-600 mAh, typique
 batterie_nano_p   = 25;
 batterie_nano_h   = 7;
-batterie_esp32_l  = 50;    // 1000-1200 mAh, typique — bien plus grande
+batterie_esp32_l  = 50;   // 1000-1200 mAh, typique — bien plus grande
 batterie_esp32_p  = 34;
 batterie_esp32_h  = 7;
 
 // Bouton "BUZZ" — type arcade, gros et satisfaisant à presser (pas un petit
 // bouton tactile 6mm) : diamètre de perçage à ajuster selon le bouton choisi
-bouton_diametre   = 24;
+bouton_diametre  = 24;
 
-// Port USB-C du module de charge (cutout sur le côté)
-usb_c_largeur     = 9.5;
-usb_c_hauteur     = 3.5;
+// Port USB-C du module de charge (cutout sur l'étage batterie)
+usb_c_largeur    = 9.5;
+usb_c_hauteur    = 3.5;
 
-// Interrupteur (glissière) — cutout rectangulaire sur le côté
+// Interrupteur (glissière) — cutout sur l'étage PCB (facile d'accès en haut)
 interrupteur_largeur = 12;
 interrupteur_hauteur = 6;
 
-// Vis de fermeture du couvercle (auto-taraudeuses dans bossages imprimés)
-vis_diametre_ame  = 2.4;   // diamètre d'âme pour vis M3 autotaraudeuse dans plastique
-bossage_diametre  = 7;
-marge_coin        = 6;     // distance des bossages par rapport aux coins
+// Fente de passage de fils entre étage batterie et étage PCB (alimentation
+// + cables du module de charge)
+fente_cables_largeur = 10;
+fente_cables_hauteur = 3;
+
+// Vis (auto-taraudeuses dans bossages imprimés) -- 3 jeux : couvercle sup.
+// -> corps, et corps -> trappe batterie
+vis_diametre_ame = 2.4;   // âme pour vis M3 autotaraudeuse
+bossage_diametre = 7;
+marge_coin       = 6;     // distance des bossages par rapport aux coins
 
 // ---- DIMENSIONS DÉRIVÉES SELON LA VARIANTE ----
 pcb_largeur  = (VARIANTE == "esp32") ? pcb_largeur_esp32  : pcb_largeur_nano;
@@ -61,20 +83,15 @@ bat_l        = (VARIANTE == "esp32") ? batterie_esp32_l   : batterie_nano_l;
 bat_p        = (VARIANTE == "esp32") ? batterie_esp32_p   : batterie_nano_p;
 bat_h        = (VARIANTE == "esp32") ? batterie_esp32_h   : batterie_nano_h;
 
-// [FIX] Le PCB et la batterie côte à côte SUR LA LONGUEUR donnaient un
-// boîtier en forme de baguette (~30 x 85mm) bien trop étroit pour un bouton
-// arcade confortable -- le trou de bouton dépassait presque la largeur du
-// couvercle. Disposition changée : côte à côte SUR LA LARGEUR, ce qui donne
-// un gabarit plus carré, plus naturel à tenir en main et à presser au pouce.
-espace_cablage = 5;
-interieur_largeur  = pcb_largeur + bat_p + espace_cablage + 2*jeu;
+// Étages empilés (pas côte à côte) -> l'empreinte extérieure commune est
+// la plus grande des deux compartiments, dans chaque dimension.
+interieur_largeur  = max(pcb_largeur, bat_p) + 2*jeu;
 interieur_longueur = max(pcb_longueur, bat_l) + 2*jeu;
-interieur_hauteur  = max(hauteur_interieure, bat_h + 6); // +6 pour le PCB + composants en hauteur
-
 exterieur_largeur  = interieur_largeur  + 2*epaisseur_paroi;
 exterieur_longueur = interieur_longueur + 2*epaisseur_paroi;
-hauteur_base       = interieur_hauteur * 0.65;  // le bac principal
-hauteur_couvercle  = interieur_hauteur * 0.35 + epaisseur_paroi;
+
+hauteur_etage_pcb      = hauteur_headers;
+hauteur_etage_batterie = bat_h + 2*jeu + 2; // +2mm de marge de manoeuvre
 
 $fn = 48; // résolution des cercles/cylindres
 
@@ -97,82 +114,109 @@ function pos_bossages() = [
 ];
 
 // ==========================================================================
-// BAC PRINCIPAL (base)
+// CORPS PRINCIPAL : étage PCB (haut, fermé) + étagère + étage batterie
+// (bas, OUVERT -- ferme par la trappe séparée). Un seul corps imprimé,
+// mais deux volumes internes accessibles indépendamment : couvercle
+// supérieur pour le PCB, trappe du dessous pour la batterie.
 // ==========================================================================
-module base() {
+module corps_principal() {
+    hauteur_totale = hauteur_etage_pcb + hauteur_shelf + hauteur_etage_batterie;
+
     difference() {
         union() {
-            // Coque extérieure
-            boite_arrondie(exterieur_largeur, exterieur_longueur, hauteur_base, 4);
+            boite_arrondie(exterieur_largeur, exterieur_longueur, hauteur_totale, 4);
 
-            // Bossages de vis (pleins, perces plus bas)
+            // Bossages de vis (pleins sur toute la hauteur, perces plus bas)
             for (pos = pos_bossages())
                 translate([pos[0], pos[1], 0])
-                    cylinder(h = hauteur_base, d = bossage_diametre);
+                    cylinder(h = hauteur_totale, d = bossage_diametre);
         }
 
-        // Évidement intérieur (creuse la coque)
-        translate([epaisseur_paroi, epaisseur_paroi, epaisseur_paroi])
-            cube([interieur_largeur, interieur_longueur, hauteur_base]);
+        // Cavité étage batterie (en bas, ouverte vers le dessous)
+        translate([epaisseur_paroi, epaisseur_paroi, -1])
+            cube([interieur_largeur, interieur_longueur, hauteur_etage_batterie + 1]);
 
-        // Avant-trou pour vis autotaraudeuses dans les bossages
+        // Cavité étage PCB (au-dessus de l'étagère, ouverte vers le dessus
+        // -- fermée par le couvercle supérieur)
+        translate([epaisseur_paroi, epaisseur_paroi, hauteur_etage_batterie + hauteur_shelf])
+            cube([interieur_largeur, interieur_longueur, hauteur_etage_pcb + 1]);
+
+        // Fente de passage des câbles à travers l'étagère
+        translate([exterieur_largeur/2 - fente_cables_largeur/2,
+                   epaisseur_paroi - 0.5,
+                   hauteur_etage_batterie])
+            cube([fente_cables_largeur, fente_cables_hauteur, hauteur_shelf + 1]);
+
+        // Avant-trous vis (traversant tout le corps, tête côté couvercle sup.,
+        // écrou/auto-taraudage côté trappe -- simplifié en trou simple ici)
         for (pos = pos_bossages())
             translate([pos[0], pos[1], -1])
-                cylinder(h = hauteur_base + 2, d = vis_diametre_ame);
+                cylinder(h = hauteur_totale + 2, d = vis_diametre_ame);
 
-        // Découpe port USB-C : sur le petit côté (y=0), centrée en X sur la
-        // zone batterie/module de charge (moitié droite du boîtier, voir
-        // disposition PCB | espace câblage | batterie ci-dessus)
-        translate([epaisseur_paroi + pcb_largeur + espace_cablage + bat_p/2 - usb_c_largeur/2,
+        // Découpe USB-C sur l'étage batterie (accès au port de charge)
+        translate([exterieur_largeur/2 - usb_c_largeur/2,
                    -1,
-                   epaisseur_paroi + 2])
+                   hauteur_etage_batterie/2 - usb_c_hauteur/2 + epaisseur_paroi/2])
             cube([usb_c_largeur, epaisseur_paroi + 2, usb_c_hauteur]);
 
-        // Découpe interrupteur, sur le grand côté (x=0), pres du coin
+        // Découpe interrupteur sur l'étage PCB (facile d'accès, près du haut)
         translate([-1,
                    marge_coin*2,
-                   epaisseur_paroi + 2])
+                   hauteur_etage_batterie + hauteur_shelf + hauteur_etage_pcb/2 - interrupteur_hauteur/2])
             cube([epaisseur_paroi + 2, interrupteur_largeur, interrupteur_hauteur]);
     }
 }
 
 // ==========================================================================
-// COUVERCLE (avec le trou du bouton BUZZ)
+// COUVERCLE SUPÉRIEUR (étage PCB) -- avec le trou du bouton BUZZ
 // ==========================================================================
-module couvercle() {
+module couvercle_superieur() {
+    epaisseur_couvercle = epaisseur_paroi + 1;
     difference() {
         union() {
-            boite_arrondie(exterieur_largeur, exterieur_longueur, hauteur_couvercle, 4);
-
+            boite_arrondie(exterieur_largeur, exterieur_longueur, epaisseur_couvercle, 4);
             for (pos = pos_bossages())
                 translate([pos[0], pos[1], 0])
-                    cylinder(h = hauteur_couvercle, d = bossage_diametre + 2 * jeu + 1);
+                    cylinder(h = epaisseur_couvercle, d = bossage_diametre + 2*jeu + 1);
         }
-
-        // Trou pour vis (traversant, tête fraisée simplifiée en cylindre simple)
         for (pos = pos_bossages())
             translate([pos[0], pos[1], -1])
-                cylinder(h = hauteur_couvercle + 2, d = vis_diametre_ame + 1);
+                cylinder(h = epaisseur_couvercle + 2, d = vis_diametre_ame + 1);
 
-        // [FIX] Centrer le trou sur la moitié PCB le faisait toucher/déborder
-        // le bord exterieur du couvercle (bouton plus large que la moitié
-        // PCB elle-même) -> bord du cylindre tangent au contour arrondi,
-        // geometrie non-manifold (CGAL "Simple: no"). Un bouton panel-mount
-        // se cable de toute facon par 2 fils volants jusqu'au PCB, donc rien
-        // n'oblige a le centrer pile au-dessus de la carte : centré sur tout
-        // le couvercle, avec marge de chaque côté.
         translate([exterieur_largeur/2, exterieur_longueur/2, -1])
-            cylinder(h = hauteur_couvercle + 2, d = bouton_diametre);
+            cylinder(h = epaisseur_couvercle + 2, d = bouton_diametre);
     }
 }
 
 // ==========================================================================
-// RENDU (base + couvercle décalé à côté pour visualiser les deux à l'impression)
+// TRAPPE BATTERIE (étage du bas) -- démontable indépendamment du couvercle
+// supérieur, pour changer/recharger la batterie sans toucher au PCB.
 // ==========================================================================
-base();
+module trappe_batterie() {
+    epaisseur_trappe = epaisseur_paroi + 1;
+    difference() {
+        union() {
+            boite_arrondie(exterieur_largeur, exterieur_longueur, epaisseur_trappe, 4);
+            for (pos = pos_bossages())
+                translate([pos[0], pos[1], 0])
+                    cylinder(h = epaisseur_trappe, d = bossage_diametre + 2*jeu + 1);
+        }
+        for (pos = pos_bossages())
+            translate([pos[0], pos[1], -1])
+                cylinder(h = epaisseur_trappe + 2, d = vis_diametre_ame + 1);
+    }
+}
+
+// ==========================================================================
+// RENDU (les 3 pièces décalées côte à côte pour visualiser à l'impression)
+// ==========================================================================
+corps_principal();
 translate([exterieur_largeur + 15, 0, 0])
-    couvercle();
+    couvercle_superieur();
+translate([2*(exterieur_largeur + 15), 0, 0])
+    trappe_batterie();
 
 echo(str("Variante : ", VARIANTE));
-echo(str("Boîtier extérieur (L x P x H totale) : ",
-    exterieur_largeur, " x ", exterieur_longueur, " x ", hauteur_base + hauteur_couvercle, " mm"));
+echo(str("Empreinte exterieure (L x P) : ", exterieur_largeur, " x ", exterieur_longueur, " mm"));
+echo(str("Hauteur totale (corps + couvercle + trappe) : ",
+    hauteur_etage_batterie + hauteur_shelf + hauteur_etage_pcb + 2*(epaisseur_paroi + 1), " mm"));
