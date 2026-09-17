@@ -31,6 +31,14 @@ Thumbs.db
 # Local Arduino CLI toolchain cache (large, machine-specific)
 .arduino-cli/
 
+# Apps hybrides Capacitor : www/ (genere par sync.sh) et les projets natifs
+# android/ios (generes par `npx cap add`) ne sont pas commites, regeneres a
+# chaque build (local ou CI) depuis web/ -- source de verite unique.
+hybrid-app-*/www/
+hybrid-app-*/android/
+hybrid-app-*/ios/
+hybrid-app-*/node_modules/
+
 # Quiz logger (diagnostics)
 diagnostics/quiz_log_*.txt
 diagnostics/quiz_resume_*.txt

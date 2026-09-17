@@ -1,0 +1,14 @@
+{
+  "appId": "com.quizdmx.animateur",
+  "appName": "Quiz Animateur",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "server": {
+    "cleartext": true,
+    "androidScheme": "http",
+    "allowNavigation": [
+      "192.168.4.1",
+      "quizdmx.local"
+    ]
+  }
+}

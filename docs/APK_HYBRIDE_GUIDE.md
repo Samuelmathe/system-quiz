@@ -1,6 +1,6 @@
-# Guide de Génération de l'APK Hybride & Câblage ESP32
+# Guide de Génération des Apps Hybrides & Câblage ESP32
 
-Ce guide vous explique comment transformer l'interface mobile animateur en **application Android (.APK)** et comment câbler et téléverser le firmware dans l'**ESP32**.
+Ce guide vous explique comment transformer les interfaces web (Animateur+Public, Régie/Config) en **applications Android (.apk)**, ce qu'il en est pour iOS, et comment câbler et téléverser le firmware dans l'**ESP32**.
 
 ---
 
@@ -14,48 +14,60 @@ Grâce au fichier [`manifest.json`](file:///home/samuel/Downloads/dev%20projet/d
 4. Sélectionnez **« Ajouter à l'écran d'accueil »** ou **« Installer l'application »**.
 5. **Résultat :** L'application s'installe avec son icône dédiée, se lance en plein écran sans barre d'adresse et vibre à chaque buzz comme une application native 100% Android !
 
+*Ça marche exactement pareil pour `config.html` (Régie) ou `public.html` — changez juste l'adresse à l'étape 2.*
+
 ---
 
 ## 🛠️ Option 2 : Compilation d'un véritable fichier `.apk` avec Capacitor
 
-Si vous devez distribuer un fichier `.apk` installable par clé USB ou WhatsApp :
+Si vous devez distribuer un fichier installable par clé USB ou WhatsApp, il y a **deux applications séparées** (pas une seule qui bundle tout) :
 
-### Prérequis
-- [Node.js](https://nodejs.org) (v18+)
-- [Android Studio](https://developer.android.com/studio) avec le SDK Android (Platform-Tools & Build-Tools)
+| App | Dossier | Pages incluses | Pourquoi séparée |
+|---|---|---|---|
+| **Quiz Animateur** | [`hybrid-app-animateur/`](../hybrid-app-animateur) | `animateur.html` + `public.html` (mini-portail au démarrage) | Usage courant, à distribuer largement |
+| **Quiz Régie** | [`hybrid-app-config/`](../hybrid-app-config) | `config.html` uniquement | Pilote le DMX en direct — protégée par son propre mot de passe (voir [GUIDE_CLIENT.md](GUIDE_CLIENT.md)), à ne pas distribuer aussi largement que l'app Animateur |
 
-### Étapes de génération :
+### Option 2a — Le plus simple : récupérer l'APK déjà compilé (GitHub Actions)
 
-1. Ouvrez un terminal dans le dossier [`hybrid-app/`](file:///home/samuel/Downloads/dev%20projet/dmxproject/hybrid-app) :
-   ```bash
-   cd "hybrid-app"
-   npm install
-   ```
+Chaque push sur `main` déclenche automatiquement la compilation des deux APK (workflow **Build Hybrid Apps (Android APK)**) :
 
-2. Initialisez le projet Android :
-   ```bash
-   npx cap add android
-   ```
+1. Allez sur l'onglet **Actions** du dépôt GitHub.
+2. Ouvrez le dernier run réussi de **Build Hybrid Apps (Android APK)**.
+3. Dans **Artifacts**, téléchargez `hybrid-app-animateur-debug-apk` ou `hybrid-app-config-debug-apk`.
+4. Transférez le `.apk` sur le téléphone Android (USB, WhatsApp, e-mail…) et installez-le (autoriser « sources inconnues » si demandé).
 
-3. Synchronisez les fichiers web :
-   ```bash
-   npx cap copy
-   ```
+C'est un **APK de debug non signé** — parfait pour un usage interne/événementiel, mais pas pour une publication sur le Play Store (ça demanderait une signature de release, hors périmètre ici).
 
-4. Ouvrez le projet dans Android Studio :
-   ```bash
-   npx cap open android
-   ```
-   *Ou compilez directement en ligne de commande :*
-   ```bash
-   cd android && ./gradlew assembleDebug
-   ```
+### Option 2b — Compiler soi-même en local
 
-5. Récupérez votre fichier APK généré dans :
-   `hybrid-app/android/app/build/outputs/apk/debug/app-debug.apk`
+**Prérequis** : [Node.js](https://nodejs.org) (v18+), [Android Studio](https://developer.android.com/studio) avec le SDK Android.
+
+Pour **chaque** app (remplacez `hybrid-app-animateur` par `hybrid-app-config` pour l'autre) :
+
+```bash
+cd hybrid-app-animateur
+npm install
+npm run init:android   # une seule fois : scaffolding du projet Android
+npm run sync           # copie les fichiers de web/ dans www/, puis cap copy + cap sync
+npm run build:apk      # ./gradlew assembleDebug
+```
+
+L'APK généré se trouve dans `hybrid-app-animateur/android/app/build/outputs/apk/debug/app-debug.apk`.
+
+*Pour ouvrir dans Android Studio (déboguer, changer l'icône…) à la place de la ligne de commande :* `npm run open:android`.
 
 > [!IMPORTANT]
-> Le fichier [`capacitor.config.json`](file:///home/samuel/Downloads/dev%20projet/dmxproject/hybrid-app/capacitor.config.json) inclut déjà `"cleartext": true`. C'est **obligatoire** sur Android moderne pour autoriser la connexion au point d'accès Wi-Fi local non-chiffré `http://192.168.4.1` et au WebSocket `ws://192.168.4.1/ws`.
+> `capacitor.config.json` inclut déjà `"cleartext": true`. C'est **obligatoire** sur Android moderne pour autoriser la connexion au point d'accès Wi-Fi local non-chiffré `http://192.168.4.1` et au WebSocket `ws://192.168.4.1/ws`.
+
+### 🍎 Et pour iOS ?
+
+Un projet Capacitor iOS existe aussi (`npm run init:ios`, `npm run sync`, `npm run open:ios`) et une CI (**Build Hybrid Apps (iOS, verification simulateur)**) vérifie automatiquement qu'il compile — mais **uniquement pour le simulateur, sans signature**. Produire une vraie app installable sur un iPhone demande obligatoirement :
+
+- Un **compte Apple Developer** (payant, ~99$/an),
+- Un **Mac avec Xcode** pour l'étape finale d'archivage/signature,
+- Des certificats et profils de provisionnement configurés dans le compte Apple.
+
+Rien de tout ça n'est automatisable sans que vous (ou le client) fournissiez ce compte — c'est une contrainte d'Apple, pas une limite de ce projet. Si vous avez un compte Apple Developer, ouvrez `ios/App.xcworkspace` dans Xcode après `npm run sync` et suivez le flux Apple habituel (Signing & Capabilities → Archive → distribuer).
 
 ---
 

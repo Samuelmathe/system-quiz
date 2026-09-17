@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#080B11">
+  <script>(function(){try{var t=localStorage.getItem("quiz_dmx_theme");if(t!=="light"&&t!=="dark"){t=(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";}document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+  <title>Quiz DMX — Animateur</title>
+
+  <link rel="stylesheet" href="style.css">
+  <link rel="manifest" href="manifest.json">
+</head>
+<body>
+
+  <header class="app-header">
+    <div class="header-brand">
+      <div class="status-dot" id="conn-dot"></div>
+      <span class="brand-gradient">QUIZ DMX SYSTEM</span>
+    </div>
+    <div class="header-meta">
+      <span class="badge" id="badge-conn">ESP32 Connecté</span>
+    </div>
+  </header>
+
+  <div class="portal-container">
+    <h1 class="portal-title">Bienvenue sur le Quiz</h1>
+    <p class="portal-subtitle">Sélectionnez votre rôle :</p>
+
+    <div class="portal-grid">
+
+      <!-- CARTE 1 : ANIMATEUR (MOBILE & TOUCH) -->
+      <a href="animateur.html" class="portal-card">
+        <div class="portal-icon">📱</div>
+        <h2 class="portal-card-title">Télécommande Animateur</h2>
+        <p class="portal-card-desc">
+          Conçu pour <strong>smartphone et tablette</strong>. Détection immédiate du buzz, compte à rebours, validation tactile au pouce et gestion des questions.
+        </p>
+        <div style="margin-top: 20px;">
+          <span class="btn btn-primary" style="font-size: 0.85rem; padding: 6px 14px;">Ouvrir l'Animateur ▸</span>
+        </div>
+      </a>
+
+      <!-- CARTE 2 : ÉCRAN PUBLIC / VIDÉOPROJECTEUR -->
+      <a href="public.html" class="portal-card">
+        <div class="portal-icon">📺</div>
+        <h2 class="portal-card-title">Affichage Public</h2>
+        <p class="portal-card-desc">
+          À projeter sur le <strong>vidéoprojecteur ou grand écran</strong>. Affichage immersif du nom de l'équipe qui buzze, gros chrono et podium final festif.
+        </p>
+        <div style="margin-top: 20px;">
+          <span class="btn btn-subtle" style="font-size: 0.85rem; padding: 6px 14px; border: 1px solid var(--border-subtle);">Lancer le Projecteur ▸</span>
+        </div>
+      </a>
+
+    </div>
+  </div>
+
+  <script src="app-common.js"></script>
+  <script>
+    (function() {
+      const hub = window.QuizHub;
+      const connDot = document.getElementById("conn-dot");
+      const badgeConn = document.getElementById("badge-conn");
+
+      hub.subscribe((state) => {
+        if (state.connected) {
+          connDot.className = "status-dot online";
+          badgeConn.textContent = "ESP32 En Ligne";
+          badgeConn.style.color = "var(--color-success)";
+        } else {
+          connDot.className = "status-dot";
+          badgeConn.textContent = "Wi-Fi Déconnecté";
+          badgeConn.style.color = "var(--text-muted)";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

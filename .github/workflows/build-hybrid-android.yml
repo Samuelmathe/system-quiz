@@ -1,0 +1,53 @@
+name: Build Hybrid Apps (Android APK)
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'web/**'
+      - 'hybrid-app-animateur/**'
+      - 'hybrid-app-config/**'
+      - '.github/workflows/build-hybrid-android.yml'
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        app: [hybrid-app-animateur, hybrid-app-config]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm install
+
+      - name: Add Android platform
+        working-directory: ${{ matrix.app }}
+        run: npx cap add android
+
+      - name: Prepare www/ and sync into the native project
+        working-directory: ${{ matrix.app }}
+        run: npm run sync
+
+      - name: Build debug APK
+        working-directory: ${{ matrix.app }}
+        run: npm run build:apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-debug-apk
+          path: ${{ matrix.app }}/android/app/build/outputs/apk/debug/app-debug.apk

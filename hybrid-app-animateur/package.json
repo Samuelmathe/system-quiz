@@ -1,0 +1,22 @@
+{
+  "name": "quiz-animateur-public-apk",
+  "version": "1.0.0",
+  "description": "Application hybride (Android/iOS) pour les roles Animateur et Ecran Public du Quiz DMX",
+  "scripts": {
+    "prepare:www": "bash sync.sh",
+    "init:android": "npx cap add android",
+    "init:ios": "npx cap add ios",
+    "sync": "npm run prepare:www && npx cap copy && npx cap sync",
+    "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios",
+    "build:apk": "cd android && ./gradlew assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/ios": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}
