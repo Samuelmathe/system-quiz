@@ -551,46 +551,25 @@ void parseCommande(const char *line) {
 // LUMIÈRES DMX
 // =========================================================
 
-// Convertit une couleur RGB continue vers la position de roue de couleurs
-// la plus proche (pour les lyres qui n'ont qu'un seul canal "Couleur" au
-// lieu de canaux R/G/B independants). Valeurs de reference approximatives
-// pour chaque couleur de roue standard ; renvoie la valeur DMX du centre
-// de la plage correspondante.
-byte couleurVersRoue(byte r, byte g, byte b) {
-    static const struct { byte r, g, b, valeur; } roue[] = {
-        {255, 255, 255,   4}, // Blanc
-        {255,   0,   0,  14}, // Rouge
-        {  0, 255,   0,  24}, // Vert
-        {  0,   0, 255,  34}, // Bleu
-        {255, 255,   0,  44}, // Jaune
-        {255,   0, 128,  54}, // Rose
-        {255, 128,   0,  64}, // Orange
-        {  0, 255, 255,  74}, // Cyan
-    };
-    long meilleureDist = -1;
-    byte meilleureValeur = roue[0].valeur;
-    for (uint8_t i = 0; i < 8; i++) {
-        long dr = (long)r - roue[i].r;
-        long dg = (long)g - roue[i].g;
-        long db = (long)b - roue[i].b;
-        long dist = dr * dr + dg * dg + db * db;
-        if (meilleureDist < 0 || dist < meilleureDist) {
-            meilleureDist = dist;
-            meilleureValeur = roue[i].valeur;
-        }
-    }
-    return meilleureValeur;
-}
-
 void setProjecteur(int addr, int r, int g, int b, byte strobe, const FixtureProfile &profil) {
     int maxC = constrain(profil.nbCanaux, 1, 30);
     if (profil.offDim >= 0 && profil.offDim < maxC) DMXSerial.write(addr + profil.offDim, 255);
 
     if (profil.mode == 1) {
-        // Roue de couleurs : offR reutilise comme canal unique de couleur,
-        // offG/offB ignores (pas de canaux separes sur ce type de fixture).
+        // [FIX] Roue de couleurs : offR reutilise comme canal unique de
+        // couleur, offG/offB ignores. AVANT : une fonction couleurVersRoue()
+        // devinait la position de roue la plus proche a partir d'un RVB, en
+        // supposant une disposition de roue "standard" a 8 teintes -- mais
+        // les roues de couleur NE SONT PAS standardisees entre marques/
+        // modeles de lyres (valeurs DMX differentes, ordre different, parfois
+        // moins de teintes). Le devinettage etait donc fiable uniquement
+        // pour un modele qui matchait par coincidence.
+        // MAINTENANT : "r" est directement la valeur DMX brute (0-255) de la
+        // roue, saisie manuellement par le technicien dans l'interface (voir
+        // config.js) en lisant le manuel de son projecteur -- fonctionne
+        // avec n'importe quelle marque. g/b restent inutilises sur ce canal.
         if (profil.offR >= 0 && profil.offR < maxC) {
-            DMXSerial.write(addr + profil.offR, couleurVersRoue((byte)r, (byte)g, (byte)b));
+            DMXSerial.write(addr + profil.offR, (byte)r);
         }
     } else {
         if (profil.offR >= 0 && profil.offR < maxC) DMXSerial.write(addr + profil.offR, r);

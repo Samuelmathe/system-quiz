@@ -230,6 +230,35 @@
     });
   }
 
+  // Valeurs DMX indicatives d'une roue de couleurs "standard" 8 teintes —
+  // n'est PAS universel : chaque marque/modele de lyre a sa propre roue
+  // (valeurs et ordre differents). Sert uniquement de point de depart rapide
+  // dans le champ manuel ci-dessous ; a verifier/ajuster avec le manuel du
+  // projecteur reellement utilise.
+  const ROUE_PRESETS = [
+    { label: "Blanc", valeur: 4 },
+    { label: "Rouge", valeur: 14 },
+    { label: "Vert", valeur: 24 },
+    { label: "Bleu", valeur: 34 },
+    { label: "Jaune", valeur: 44 },
+    { label: "Rose", valeur: 54 },
+    { label: "Orange", valeur: 64 },
+    { label: "Cyan", valeur: 74 }
+  ];
+
+  // La valeur de roue est stockee dans l'octet Rouge du hex couleur
+  // (#XX0000, G/B inutilises pour ce canal) — meme format de stockage/
+  // transmission SET_COL que le mode RVB, juste reinterprete cote Mega
+  // (voir setProjecteur() dans megaf.ino).
+  function hexVersValeurRoue(hex) {
+    const n = parseInt((hex || "#000000").slice(1, 3), 16);
+    return Number.isFinite(n) ? n : 0;
+  }
+  function valeurRoueVersHex(valeur) {
+    const v = Math.max(0, Math.min(255, parseInt(valeur, 10) || 0));
+    return "#" + v.toString(16).padStart(2, "0").toUpperCase() + "0000";
+  }
+
   // Rendu des Équipes avec 1 couleur DMX par projecteur physique
   function renderTeamsPalettes(state) {
     badgeEquipesCount.textContent = `${state.equipes.length} équipes`;
@@ -244,18 +273,37 @@
       // Couleurs DMX matérielles (1 par projecteur)
       const dmxColors = hub.getDmxColors(eqIdx);
 
-      // Génère les pastilles de couleur pour chaque projecteur branché
+      // Génère les pastilles de couleur (RVB) ou le champ de valeur de roue
+      // (mode Lyre) pour chaque projecteur branché
       let swatchesHtml = "";
       state.projecteurs.forEach((proj, projIdx) => {
         const color = dmxColors[projIdx] || "#FFFFFF";
-        swatchesHtml += `
-          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
-            <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">Proj ${projIdx + 1}</span>
-            <div class="palette-swatch-box" style="background-color: ${color};" title="Projecteur ${projIdx + 1} (Canal ${proj.adresse})">
-              <input type="color" value="${color}" data-team-id="${eqIdx}" data-proj-idx="${projIdx}">
+
+        if (proj.mode === 1) {
+          const valeur = hexVersValeurRoue(color);
+          const presetsHtml = ROUE_PRESETS.map(p =>
+            `<button type="button" class="btn-palette-adjust" data-roue-preset="${p.valeur}" data-team-id="${eqIdx}" data-proj-idx="${projIdx}"
+                     title="${p.label} (valeur indicative ${p.valeur})" style="width: 22px; height: 22px; font-size: 0.6rem; padding: 0;">${p.label[0]}</button>`
+          ).join("");
+          swatchesHtml += `
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">Proj ${projIdx + 1} (roue)</span>
+              <input type="number" min="0" max="255" value="${valeur}" data-team-id="${eqIdx}" data-proj-idx="${projIdx}" data-roue-value="1"
+                     title="Valeur DMX brute de la roue (0-255) — voir le manuel du projecteur"
+                     style="width: 60px; background: var(--bg-input); border: 1px solid var(--border-subtle); border-radius: 6px; color: #fff; padding: 4px 6px; font-size: 0.85rem; text-align: center;">
+              <div style="display: flex; gap: 2px; flex-wrap: wrap; max-width: 90px; justify-content: center;">${presetsHtml}</div>
             </div>
-          </div>
-        `;
+          `;
+        } else {
+          swatchesHtml += `
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 700;">Proj ${projIdx + 1}</span>
+              <div class="palette-swatch-box" style="background-color: ${color};" title="Projecteur ${projIdx + 1} (Canal ${proj.adresse})">
+                <input type="color" value="${color}" data-team-id="${eqIdx}" data-proj-idx="${projIdx}">
+              </div>
+            </div>
+          `;
+        }
       });
 
       card.innerHTML = `
@@ -295,13 +343,34 @@
       teamsPalettesContainer.appendChild(card);
     });
 
-    // Écouteurs sur les sélecteurs de couleur DMX
+    // Écouteurs sur les sélecteurs de couleur DMX (mode RVB continu)
     teamsPalettesContainer.querySelectorAll("input[type='color']").forEach(input => {
       input.onchange = (e) => {
         const tId = parseInt(input.dataset.teamId, 10);
         const pIdx = parseInt(input.dataset.projIdx, 10);
         hub.setDmxColor(tId, pIdx, e.target.value);
         addLog(`Équipe ${tId + 1} / Projecteur ${pIdx + 1} : couleur DMX mise à jour (${e.target.value})`, "var(--gemini-cyan)");
+      };
+    });
+
+    // Écouteurs sur le champ de valeur de roue (mode Lyre) et ses préréglages
+    teamsPalettesContainer.querySelectorAll("input[data-roue-value]").forEach(input => {
+      input.onchange = (e) => {
+        const tId = parseInt(input.dataset.teamId, 10);
+        const pIdx = parseInt(input.dataset.projIdx, 10);
+        const valeur = Math.max(0, Math.min(255, parseInt(e.target.value, 10) || 0));
+        hub.setDmxColor(tId, pIdx, valeurRoueVersHex(valeur));
+        addLog(`Équipe ${tId + 1} / Projecteur ${pIdx + 1} : valeur de roue mise à jour (${valeur})`, "var(--gemini-cyan)");
+      };
+    });
+    teamsPalettesContainer.querySelectorAll("[data-roue-preset]").forEach(btn => {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        const tId = parseInt(btn.dataset.teamId, 10);
+        const pIdx = parseInt(btn.dataset.projIdx, 10);
+        const valeur = parseInt(btn.dataset.rouePreset, 10);
+        hub.setDmxColor(tId, pIdx, valeurRoueVersHex(valeur));
+        addLog(`Équipe ${tId + 1} / Projecteur ${pIdx + 1} : préréglage roue appliqué (${valeur}) — à vérifier avec votre projecteur`, "var(--gemini-cyan)");
       };
     });
 
