@@ -1,0 +1,221 @@
+Rapport ERC (2026-09-18T00:52:10+0200, Encodage UTF8)
+
+***** Feuille /
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(60.00 mm, 94.92 mm): Symbol BT1 Pin 1 [+, Passive, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(60.00 mm, 97.46 mm): Symbol #PWRGND07 Pin cachée 1 [GND, Power input, Ligne]]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(60.00 mm, 102.54 mm): Symbol BT1 Pin 2 [-, Passive, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(74.92 mm, 94.92 mm): Symbol #PWRGND06 Pin cachée 1 [GND, Power input, Ligne]]
+[label_dangling]: Label non connecté à quoi que ce soit
+    ; error
+    @(60.00 mm, 105.08 mm): Label 'BAT_PLUS'
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(74.92 mm, 105.08 mm): Symbol J2 Pin 4 [Pin_4, Passive, Ligne]
+[label_dangling]: Label non connecté à quoi que ce soit
+    ; error
+    @(117.30 mm, 82.22 mm): Label 'NRF_SCK'
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(127.46 mm, 74.60 mm): Symbol A1 Pin 30 [VIN, Power input, Ligne]
+[power_pin_not_driven]: Pin entrée de puissance pilotée par aucune pin sortie de puissance
+    ; error
+    @(127.46 mm, 74.60 mm): Symbol A1 Pin 30 [VIN, Power input, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(130.00 mm, 74.60 mm): Symbol #PWRGND00 Pin cachée 1 [GND, Power input, Ligne]]
+[power_pin_not_driven]: Pin entrée de puissance pilotée par aucune pin sortie de puissance
+    ; error
+    @(130.00 mm, 74.60 mm): Symbol #PWRGND00 Pin cachée 1 [GND, Power input, Ligne]]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 94.92 mm): Symbol A1 Pin 7 [D4, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(132.54 mm, 74.60 mm): Symbol A1 Pin 17 [3V3, Power output, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 97.46 mm): Symbol A1 Pin 8 [D5, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 100.00 mm): Symbol A1 Pin 9 [D6, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(135.08 mm, 74.60 mm): Symbol A1 Pin 27 [+5V, Power output, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 105.08 mm): Symbol A1 Pin 11 [D8, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 107.62 mm): Symbol A1 Pin 12 [D9, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 112.70 mm): Symbol A1 Pin 14 [D11, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 115.24 mm): Symbol A1 Pin 15 [D12, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 84.76 mm): Symbol A1 Pin 28 [~{RESET}, Entrée, Ligne]
+[pin_not_driven]: Pin en entrée pilotée par aucune pin en sortie pour la piloter
+    ; error
+    @(142.70 mm, 84.76 mm): Symbol A1 Pin 28 [~{RESET}, Entrée, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(117.30 mm, 117.78 mm): Symbol A1 Pin 16 [D13, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 87.30 mm): Symbol A1 Pin 3 [~{RESET}, Entrée, Ligne]
+[pin_not_driven]: Pin en entrée pilotée par aucune pin en sortie pour la piloter
+    ; error
+    @(142.70 mm, 87.30 mm): Symbol A1 Pin 3 [~{RESET}, Entrée, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 94.92 mm): Symbol A1 Pin 18 [AREF, Entrée, Ligne]
+[pin_not_driven]: Pin en entrée pilotée par aucune pin en sortie pour la piloter
+    ; error
+    @(142.70 mm, 94.92 mm): Symbol A1 Pin 18 [AREF, Entrée, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 100.00 mm): Symbol A1 Pin 19 [A0, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 102.54 mm): Symbol A1 Pin 20 [A1, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 105.08 mm): Symbol A1 Pin 21 [A2, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 107.62 mm): Symbol A1 Pin 22 [A3, Bidirectionnel, Ligne]
+[label_dangling]: Label non connecté à quoi que ce soit
+    ; error
+    @(127.46 mm, 125.40 mm): Label 'VCC_5V_SW'
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 110.16 mm): Symbol A1 Pin 23 [A4, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(130.00 mm, 125.40 mm): Symbol A1 Pin 4 [GND, Power input, Ligne]
+[power_pin_not_driven]: Pin entrée de puissance pilotée par aucune pin sortie de puissance
+    ; error
+    @(130.00 mm, 125.40 mm): Symbol A1 Pin 4 [GND, Power input, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 112.70 mm): Symbol A1 Pin 24 [A5, Bidirectionnel, Ligne]
+[power_pin_not_driven]: Pin entrée de puissance pilotée par aucune pin sortie de puissance
+    ; error
+    @(132.54 mm, 125.40 mm): Symbol A1 Pin 29 [GND, Power input, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 115.24 mm): Symbol A1 Pin 25 [A6, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(142.70 mm, 117.78 mm): Symbol A1 Pin 26 [A7, Bidirectionnel, Ligne]
+[pin_not_connected]: Pin non connectée
+    ; error
+    @(184.92 mm, 106.16 mm): Symbol J1 Pin 8 [Pin_8, Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(60.00 mm, 94.92 mm): Symbol BT1 Pin 1 [+, Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(60.00 mm, 97.46 mm): Symbol #PWRGND07 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(60.00 mm, 97.46 mm): Symbole #PWRGND07 [GND]
+[lib_symbol_mismatch]: Le symbole 'Battery_Cell' ne correspond pas à la copie en librairie 'Device'
+    ; warning
+    @(60.00 mm, 100.00 mm): Symbole BT1 [Battery_Cell]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(74.92 mm, 94.92 mm): Symbol #PWRGND06 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(74.92 mm, 94.92 mm): Symbole #PWRGND06 [GND]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(74.92 mm, 97.46 mm): Symbol J2 Pin 1 [Pin_1, Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(74.92 mm, 100.00 mm): Symbol #PWRGND05 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(74.92 mm, 100.00 mm): Symbole #PWRGND05 [GND]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(124.92 mm, 55.00 mm): Symbol SW1 Pin 1 [1, Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(135.08 mm, 55.00 mm): Symbol #PWRGND03 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(135.08 mm, 55.00 mm): Symbole #PWRGND03 [GND]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(117.30 mm, 87.30 mm): Symbol A1 Pin 1 [D1/TX, Bidirectionnel, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(130.00 mm, 74.60 mm): Symbol #PWRGND00 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(130.00 mm, 74.60 mm): Symbole #PWRGND00 [GND]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(89.92 mm, 130.00 mm): Symbol SW2 Pin 1 [A, Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(132.54 mm, 125.40 mm): Symbol #PWR3V00 Pin cachée 1 [+3V3, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole '+3V3' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(132.54 mm, 125.40 mm): Symbole #PWR3V00 [+3V3]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(124.92 mm, 137.46 mm): Symbol #PWRGND04 Pin cachée 1 [GND, Power input, Ligne]]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(124.92 mm, 137.46 mm): Symbol J3 Pin 1 [Pin_1, Passive, Ligne]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(124.92 mm, 137.46 mm): Symbole #PWRGND04 [GND]
+[no_connect_dangling]: Indicateur  "Pas de connexion" flottant
+    ; warning
+    @(184.92 mm, 85.84 mm): Non Connexion
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(184.92 mm, 88.38 mm): Symbol J1 Pin 1 [Pin_1, Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(184.92 mm, 101.08 mm): Symbol #PWRGND01 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(184.92 mm, 101.08 mm): Symbole #PWRGND01 [GND]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(184.92 mm, 103.62 mm): Symbol #PWR3V01 Pin cachée 1 [+3V3, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole '+3V3' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(184.92 mm, 103.62 mm): Symbole #PWR3V01 [+3V3]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(205.00 mm, 92.19 mm): Symbol C1 Pin 1 [Passive, Ligne]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(205.00 mm, 92.19 mm): Symbol #PWRGND02 Pin cachée 1 [GND, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole 'GND' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(205.00 mm, 92.19 mm): Symbole #PWRGND02 [GND]
+[endpoint_off_grid]: Pin de symbole ou extrémité de fil hors grille de connexion
+    ; warning
+    @(205.00 mm, 99.81 mm): Symbol #PWR3V02 Pin cachée 1 [+3V3, Power input, Ligne]]
+[lib_symbol_mismatch]: Le symbole '+3V3' ne correspond pas à la copie en librairie 'power'
+    ; warning
+    @(205.00 mm, 99.81 mm): Symbole #PWR3V02 [+3V3]
+
+** messages ERC: 72  Erreurs 40  Avertissements 32
