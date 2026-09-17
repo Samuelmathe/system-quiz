@@ -1,20 +1,25 @@
 {
   "name": "quiz-config-apk",
   "version": "1.0.0",
-  "description": "Application hybride (Android/iOS) dediee a la Regie/Configuration DMX du Quiz DMX",
+  "description": "Application hybride (Android/iOS/Desktop) dediee a la Regie/Configuration DMX du Quiz DMX",
   "scripts": {
+    "postinstall": "test -d electron && (cd electron && npm ci) || true",
     "prepare:www": "bash sync.sh",
     "init:android": "npx cap add android",
     "init:ios": "npx cap add ios",
+    "init:electron": "npx cap add @capawesome/capacitor-electron && cd electron && npm install",
     "sync": "npm run prepare:www && npx cap copy && npx cap sync",
+    "sync:electron": "npm run prepare:www && npx cap copy @capawesome/capacitor-electron && npx cap sync @capawesome/capacitor-electron",
     "open:android": "npx cap open android",
     "open:ios": "npx cap open ios",
-    "build:apk": "cd android && ./gradlew assembleDebug"
+    "build:apk": "cd android && ./gradlew assembleDebug",
+    "build:electron": "cd electron && npm run pack"
   },
   "dependencies": {
     "@capacitor/android": "^6.0.0",
     "@capacitor/core": "^6.0.0",
-    "@capacitor/ios": "^6.0.0"
+    "@capacitor/ios": "^6.0.0",
+    "@capawesome/capacitor-electron": "^0.1.1"
   },
   "devDependencies": {
     "@capacitor/cli": "^6.0.0"

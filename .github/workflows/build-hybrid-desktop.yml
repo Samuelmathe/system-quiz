@@ -1,0 +1,59 @@
+name: Build Hybrid Apps (Desktop Windows + macOS)
+
+# Empaquette les memes pages web (Animateur+Public, Regie) en applications
+# desktop natives via Capacitor Electron (@capawesome/capacitor-electron,
+# la plateforme maintenue -- @capacitor-community/electron est abandonnee
+# et connue pour des soucis de compatibilite avec Capacitor 6).
+# electron/ n'est jamais commite (voir .gitignore), regenere a chaque build.
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'web/**'
+      - 'hybrid-app-animateur/**'
+      - 'hybrid-app-config/**'
+      - '.github/workflows/build-hybrid-desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  build-desktop:
+    strategy:
+      matrix:
+        app: [hybrid-app-animateur, hybrid-app-config]
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.app }}
+        run: npm install
+
+      - name: Add Electron platform
+        working-directory: ${{ matrix.app }}
+        run: npm run init:electron
+
+      - name: Prepare www/ and sync into the Electron project
+        working-directory: ${{ matrix.app }}
+        run: npm run sync:electron
+
+      - name: Build desktop installer
+        working-directory: ${{ matrix.app }}
+        run: npm run build:electron
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.app }}-desktop-${{ matrix.os }}
+          path: |
+            ${{ matrix.app }}/electron/dist/*.exe
+            ${{ matrix.app }}/electron/dist/*.dmg
+            ${{ matrix.app }}/electron/dist/*.zip
+            ${{ matrix.app }}/electron/dist/*.blockmap
+          if-no-files-found: warn

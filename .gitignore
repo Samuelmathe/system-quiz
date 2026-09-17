@@ -37,6 +37,7 @@ Thumbs.db
 hybrid-app-*/www/
 hybrid-app-*/android/
 hybrid-app-*/ios/
+hybrid-app-*/electron/
 hybrid-app-*/node_modules/
 
 # Quiz logger (diagnostics)

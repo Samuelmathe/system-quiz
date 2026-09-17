@@ -1,6 +1,6 @@
 # Guide de Génération des Apps Hybrides & Câblage ESP32
 
-Ce guide vous explique comment transformer les interfaces web (Animateur+Public, Régie/Config) en **applications Android (.apk)**, ce qu'il en est pour iOS, et comment câbler et téléverser le firmware dans l'**ESP32**.
+Ce guide vous explique comment transformer les interfaces web (Animateur+Public, Régie/Config) en **applications Android (.apk)**, **desktop (Windows/macOS)**, ce qu'il en est pour iOS, et comment câbler et téléverser le firmware dans l'**ESP32**.
 
 ---
 
@@ -68,6 +68,37 @@ Un projet Capacitor iOS existe aussi (`npm run init:ios`, `npm run sync`, `npm r
 - Des certificats et profils de provisionnement configurés dans le compte Apple.
 
 Rien de tout ça n'est automatisable sans que vous (ou le client) fournissiez ce compte — c'est une contrainte d'Apple, pas une limite de ce projet. Si vous avez un compte Apple Developer, ouvrez `ios/App.xcworkspace` dans Xcode après `npm run sync` et suivez le flux Apple habituel (Signing & Capabilities → Archive → distribuer).
+
+---
+
+## 🖥️ Option 3 : Application desktop (Windows / macOS)
+
+Utile pour un client qui préfère une icône dédiée sur le Bureau plutôt que d'ouvrir un navigateur et taper `192.168.4.1` — même principe que les apps mobiles, via [`@capawesome/capacitor-electron`](https://capawesome.io/docs/sdks/capacitor/electron/) (la plateforme Electron **maintenue** pour Capacitor 6 ; l'ancienne `@capacitor-community/electron` est abandonnée et connue pour des soucis de compatibilité avec Capacitor 6 — ne pas l'utiliser).
+
+### Option 3a — Récupérer l'installeur déjà compilé (GitHub Actions)
+
+Chaque push sur `main` compile automatiquement les deux apps pour **Windows et macOS** (workflow **Build Hybrid Apps (Desktop Windows + macOS)**) :
+
+1. Onglet **Actions** du dépôt GitHub → dernier run réussi de ce workflow.
+2. Dans **Artifacts**, téléchargez `hybrid-app-animateur-desktop-windows-latest`, `hybrid-app-animateur-desktop-macos-latest`, ou l'équivalent `hybrid-app-config-desktop-*`.
+3. Windows : lancez le `.exe`. macOS : ouvrez le `.dmg` et glissez l'app dans Applications (macOS peut demander d'autoriser l'app dans Réglages Système → Confidentialité et sécurité, l'app n'étant pas signée par un compte Apple Developer — voir note ci-dessous).
+
+### Option 3b — Compiler soi-même en local
+
+**Prérequis** : [Node.js](https://nodejs.org) (v18+).
+
+```bash
+cd hybrid-app-animateur
+npm install
+npm run init:electron    # une seule fois : ajoute la plateforme Electron
+npm run sync:electron    # copie web/ dans www/, puis cap sync vers electron/
+npm run build:electron   # compile l'installeur (electron-builder)
+```
+
+L'installeur se trouve dans `hybrid-app-animateur/electron/dist/` (`.exe` sous Windows, `.dmg`/`.zip` sous macOS — vous ne pouvez compiler que pour l'OS sur lequel vous lancez la commande, comme pour n'importe quel outil Electron).
+
+> [!NOTE]
+> Comme les APK, ce sont des builds **non signés** (aucun certificat de signature de code Windows/Apple configuré). Windows peut afficher un avertissement SmartScreen, macOS peut bloquer l'app au premier lancement (clic droit → Ouvrir, ou l'autoriser dans Réglages Système). Suffisant pour un usage interne/événementiel ; une distribution plus large demanderait un certificat de signature (payant, hors périmètre ici).
 
 ---
 
