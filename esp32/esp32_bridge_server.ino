@@ -2,6 +2,10 @@
 // ESP32 BRIDGE & WEBSERVER — SYSTÈME QUIZ DMX (REMPLACE LE RF-NANO)
 // ==========================================================================
 // Carte recommandée : ESP32 Dev Module / NodeMCU-32S / ESP-WROOM-32
+// Carte confirmée commandée par le client pour le hub (régie centrale) :
+// ESP32 DevKit V1, puce USB-série FT232, 30 broches, micro-USB. Choisir
+// "ESP32 Dev Module" dans Arduino IDE. Pilote USB nécessaire : FTDI VCP
+// (pas CP210x/CH340, ce n'est pas la puce de cette carte).
 //
 // Rôles de l'ESP32 :
 //   1. Point d'accès Wi-Fi autonome ("QuizDMX-Pro") + mDNS (quizdmx.local)

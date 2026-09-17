@@ -10,7 +10,7 @@ combien d'équipes maximum, et comment se connecter en Wi-Fi le jour J.
 | Rôle | Fichier `.ino` | Carte | Obligatoire ? |
 |---|---|---|---|
 | Logique de jeu + DMX | `megaf.ino` | Arduino MEGA 2560 | **Oui, toujours** |
-| Hub radio + Wi-Fi + serveur web | `esp32/esp32_bridge_server.ino` | ESP32 (Dev Module) | Oui (remplace le RF-Nano) |
+| Hub radio + Wi-Fi + serveur web | `esp32/esp32_bridge_server.ino` | ESP32 DevKit V1, FT232, 30 broches, micro-USB *(commandée)* | Oui (remplace le RF-Nano) |
 | *Alternative au hub ESP32* | `rf_nano_bridge.ino` | RF-Nano (Nano + nRF24 intégré) | Seulement si vous n'utilisez pas l'ESP32 |
 | Buzzer d'équipe | `buzzer_nano_equipe.ino` | Nano + module nRF24L01 | Un par équipe |
 | *Secours équipe (si nRF24 pose problème)* | `esp32_buzzer_equipe.ino` | ESP32 | Optionnel, en remplacement d'un boîtier équipe |
@@ -27,6 +27,7 @@ combien d'équipes maximum, et comment se connecter en Wi-Fi le jour J.
 1. **Arduino IDE 2.x** installé ([arduino.cc/en/software](https://www.arduino.cc/en/software)).
 2. **Câble USB** adapté à chaque carte (micro-USB pour la plupart des Nano/ESP32, parfois USB-C selon le modèle).
 3. Si une carte n'apparaît pas dans **Outils > Port** : voir le tableau de dépannage en bas de ce guide.
+4. **Carte du hub (régie centrale) confirmée** : ESP32 DevKit V1, puce USB-série **FT232**, 30 broches, micro-USB. Si elle n'apparaît pas dans **Outils > Port**, c'est le pilote **FTDI VCP** qu'il faut installer (pas CP210x ni CH340, ce n'est pas la puce de cette carte).
 
 ---
 

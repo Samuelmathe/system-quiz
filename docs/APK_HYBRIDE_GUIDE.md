@@ -183,7 +183,7 @@ Mega TX (5V) ───[ 1 kΩ ]───┬───> ESP32 RX (3.3V)
 
 | Symptôme | Cause probable | Solution |
 | :--- | :--- | :--- |
-| Aucun port ne s'affiche dans **Outils > Port** | Pilote USB-série manquant | Installez le pilote correspondant à la puce de votre carte ESP32 (souvent **CP210x** ou **CH340** selon le fabricant — cherchez le nom exact inscrit sur la puce USB de votre carte + « driver » sur le site du fabricant). |
+| Aucun port ne s'affiche dans **Outils > Port** | Pilote USB-série manquant | Installez le pilote correspondant à la puce de votre carte ESP32 (**FTDI VCP** pour la carte ESP32 DevKit V1/FT232 confirmée pour le hub régie ; sinon souvent **CP210x** ou **CH340** selon le fabricant — cherchez le nom exact inscrit sur la puce USB de votre carte + « driver » sur le site du fabricant). |
 | Erreur *"Sketch too big"* / dépasse l'espace disponible | Partition Scheme trop petite pour le code | Reprenez l'étape 1.3 : choisissez un schéma avec plus d'espace APP. |
 | L'envoi LittleFS échoue ou le port se ferme tout seul | Moniteur Série encore ouvert, ou mauvais port sélectionné | Fermez le Moniteur Série, revérifiez **Outils > Port**. |
 | Page de secours au lieu de l'interface | Fichiers `web/` pas encore envoyés en LittleFS | Refaites l'étape 2 ci-dessus (le firmware seul ne suffit pas, il faut aussi l'envoi LittleFS séparé). |
