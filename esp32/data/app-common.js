@@ -556,10 +556,16 @@
       this._notify("CONTINUE_GAME");
     }
 
-    // Synchronisation de la configuration vers l'ESP32 / Mega
-    syncConfigToMega() {
+    // Synchronisation de la configuration vers l'ESP32 / Mega. Le mot de
+    // passe Régie vit dans config.js (pas ici) : app-common.js est partagé
+    // par toutes les pages, animateur/public n'ont pas besoin de le connaître.
+    // Vérifié aussi côté ESP32 (voir esp32_bridge_server.ino) — l'écran de
+    // verrouillage de config.js seul ne suffirait pas contre un appel direct
+    // depuis la console du navigateur.
+    syncConfigToMega(password) {
       this._sendWs({
         type: "SYNC_CONFIG",
+        password: password,
         config: {
           projecteurs: this.state.projecteurs,
           equipes: this.state.equipes

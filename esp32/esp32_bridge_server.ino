@@ -60,6 +60,13 @@
 // --- Configuration Wi-Fi ---
 const char* AP_SSID = "QuizDMX-Pro";
 const char* AP_PASS = "quizdmx123"; // 8 caractères min (ou "" pour ouvert)
+
+// Mot de passe de la page Régie/Config (config.html) — DOIT être identique
+// à CONFIG_PASSWORD dans web/config.js. Changez les DEUX si vous le modifiez :
+// le mot de passe du Wi-Fi seul ne protège pas la page contre les autres
+// appareils connectés au même réseau pendant l'évènement.
+#define CONFIG_PASSWORD "regie2026"
+
 IPAddress local_IP(192, 168, 4, 1);
 IPAddress gateway(192, 168, 4, 1);
 IPAddress subnet(255, 255, 255, 0);
@@ -457,6 +464,18 @@ void handleWsMessage(void *arg, uint8_t *data, size_t len) {
             ledPulse(150);
         }
         else if (strcmp(type, "SYNC_CONFIG") == 0) {
+            // [FIX] Verification cote serveur, pas seulement dans l'UI : la
+            // page config.html demande son mot de passe visuellement, mais
+            // un appareil connecte au meme Wi-Fi pourrait sinon appeler
+            // syncConfigToMega() directement (console navigateur) sans
+            // passer par l'ecran de verrouillage. Le mot de passe DOIT donc
+            // aussi etre verifie ici, seul rempart reel avant d'ecrire sur
+            // la Mega.
+            const char* pass = doc["password"];
+            if (!pass || strcmp(pass, CONFIG_PASSWORD) != 0) {
+                broadcastLog("Synchronisation refusee : mot de passe Regie incorrect.", "#EF4444");
+                return;
+            }
             JsonObject config = doc["config"];
             syncConfigToMega(config);
         }

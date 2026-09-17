@@ -9,6 +9,43 @@
 
   const hub = window.QuizHub;
 
+  // Mot de passe Régie — DOIT être identique à CONFIG_PASSWORD dans
+  // esp32/esp32_bridge_server.ino (changez les DEUX si vous le modifiez).
+  // Écran de verrouillage = dissuasion visuelle ; la vraie protection contre
+  // un appel direct (console navigateur) est la vérification côté ESP32.
+  const CONFIG_PASSWORD = "regie2026";
+  const LOCK_SESSION_KEY = "quiz_dmx_config_unlocked";
+
+  (function initLockScreen() {
+    const lockScreen = document.getElementById("config-lock-screen");
+    const lockInput = document.getElementById("config-lock-input");
+    const lockError = document.getElementById("config-lock-error");
+    const lockSubmit = document.getElementById("config-lock-submit");
+    if (!lockScreen) return;
+
+    let dejaDeverrouille = false;
+    try { dejaDeverrouille = sessionStorage.getItem(LOCK_SESSION_KEY) === "1"; } catch (e) {}
+    if (dejaDeverrouille) {
+      lockScreen.style.display = "none";
+      return;
+    }
+
+    function tryUnlock() {
+      if (lockInput.value === CONFIG_PASSWORD) {
+        try { sessionStorage.setItem(LOCK_SESSION_KEY, "1"); } catch (e) {}
+        lockScreen.style.display = "none";
+      } else {
+        lockError.textContent = "Mot de passe incorrect.";
+        lockInput.value = "";
+        lockInput.focus();
+      }
+    }
+
+    lockSubmit.addEventListener("click", tryUnlock);
+    lockInput.addEventListener("keydown", (e) => { if (e.key === "Enter") tryUnlock(); });
+    setTimeout(() => lockInput.focus(), 50);
+  })();
+
   // DOM Elements
   const connDot = document.getElementById("conn-dot");
   const fixturesColumnList = document.getElementById("fixtures-column-list");
@@ -421,7 +458,7 @@
     btnSyncMega.textContent = "⏳ Synchronisation en cours...";
     addLog("Envoi de la configuration vers l'ESP32 & Arduino Mega...", "var(--color-gold)");
 
-    hub.syncConfigToMega();
+    hub.syncConfigToMega(CONFIG_PASSWORD);
 
     syncTimeoutId = setTimeout(() => {
       terminerSync(false, "Aucune confirmation reçue de la Mega après 6s (liaison ESP32↔Mega EEPROM à vérifier).");

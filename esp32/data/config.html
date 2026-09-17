@@ -11,6 +11,22 @@
 </head>
 <body>
 
+  <!-- Écran de verrouillage : mot de passe Régie, distinct du mot de passe
+       Wi-Fi (voir CONFIG_PASSWORD dans config.js et esp32_bridge_server.ino) -->
+  <div class="modal-backdrop" id="config-lock-screen" style="z-index: 999;">
+    <div class="modal-content glass-panel" style="max-width: 380px; text-align: center;">
+      <h2 style="margin-bottom: 8px;">🔒 Accès Régie</h2>
+      <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 16px;">
+        Cette page pilote le matériel DMX en direct. Mot de passe requis.
+      </p>
+      <div class="field-group">
+        <input type="password" id="config-lock-input" placeholder="Mot de passe" autocomplete="off">
+      </div>
+      <div id="config-lock-error" style="color: var(--color-danger); font-size: 0.8rem; margin-top: 8px; min-height: 1.2em;"></div>
+      <button class="btn btn-primary" id="config-lock-submit" style="width: 100%; margin-top: 12px;">Déverrouiller</button>
+    </div>
+  </div>
+
   <!-- En-tête Régie Technique -->
   <header class="app-header">
     <div class="header-brand">

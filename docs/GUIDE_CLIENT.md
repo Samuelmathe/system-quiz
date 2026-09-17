@@ -102,6 +102,8 @@ Un plafond encore plus dur existe côté nano son (`nano_son_final.ino`) : `team
    - ou `http://quizdmx.local` (plus simple à retenir, nécessite que l'appareil supporte mDNS — marche sur la plupart des téléphones/PC récents)
 3. Vous arrivez sur le portail (`index.html`) : choisissez **Animateur**, **Régie/Configuration** ou **Écran Public** selon l'appareil.
 4. **Un seul appareil peut faire la régie/config à la fois**, mais plusieurs animateurs/écrans publics peuvent être connectés simultanément (tous synchronisés en temps réel via WebSocket).
+5. **La page Régie/Configuration a son propre mot de passe** (`regie2026` par défaut), distinct du mot de passe Wi-Fi — n'importe qui connecté au réseau peut sinon ouvrir cette page et modifier le DMX en direct. Ce mot de passe est vérifié à deux niveaux : l'écran de verrouillage à l'ouverture de la page (`config.js`), et une seconde vérification côté ESP32 avant tout envoi réel vers la Mega (`esp32_bridge_server.ino`) — la seconde est la vraie protection, la première n'est qu'un confort visuel.
+   **Pour le changer** : éditez `CONFIG_PASSWORD` dans **les deux fichiers** (`web/config.js` et `esp32/esp32_bridge_server.ino`), avec la **même valeur**, puis relancez `sync_web_to_esp32.sh` et reflashez le hub ESP32 (voir §3.2).
 
 **Changer le SSID/mot de passe** : modifiables dans `esp32/esp32_bridge_server.ino` (`AP_SSID`, `AP_PASS`), à retéléverser ensuite.
 
@@ -116,3 +118,4 @@ Un plafond encore plus dur existe côté nano son (`nano_son_final.ino`) : `team
 | Page de secours au lieu de l'interface web | Les fichiers `web/` n'ont pas encore été envoyés en LittleFS — voir §3.2. |
 | Boîtier ESP32 de secours ne buzz jamais | Vérifiez que `ESPNOW_WIFI_CHANNEL` est identique entre ce boîtier et le hub. |
 | Deux enceintes jouent en même temps | Voir [MODES.md](../MODES.md) — un seul chemin son actif à la fois (PC ou DFPlayer), pas les deux. |
+| "Synchronisation refusée : mot de passe Régie incorrect" | `CONFIG_PASSWORD` ne correspond pas entre `web/config.js` et `esp32/esp32_bridge_server.ino` — remettez la même valeur des deux côtés et reflashez le hub. |
