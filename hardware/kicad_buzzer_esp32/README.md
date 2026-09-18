@@ -31,18 +31,22 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 
 `ESPNOW_WIFI_CHANNEL` dans `esp32_buzzer_equipe.ino` doit rester identique à celui du hub (`esp32/esp32_bridge_server.ino`) — sans rapport avec ce schéma, mais à ne pas oublier au premier flash de la carte.
 
-## PCB : placement + sérigraphie + pistes routées
+## PCB : placement compact + pistes routées
 
-`buzzer_equipe_esp32.kicad_pcb` : empreintes placées, sérigraphie, **et pistes routées** — même pipeline que la carte Nano (Freerouting en CLI headless + réimport KiCad + `kicad-cli pcb drc` réel), voir `../kicad_buzzer_nano/README.md` pour le détail du pipeline.
+`buzzer_equipe_esp32.kicad_pcb` : empreintes placées, **et pistes routées** — même pipeline que la carte Nano (Freerouting en CLI headless + réimport KiCad + `kicad-cli pcb drc` réel), voir `../kicad_buzzer_nano/README.md` pour le détail du pipeline.
 
-**U1 est maintenant un vrai port femelle**, pas le connecteur 4 broches abstrait d'avant : deux barrettes `PinSocket_1x19` (U1L/U1R, 38 broches au total, entraxe 22,86mm — la dimension déjà notée dans `hardware/boitier_buzzer_equipe.scad` pour ce module). Seules 4 des 38 positions physiques sont câblées (GPIO4, GPIO13, VIN, GND) ; les 34 autres sont présentes uniquement pour que le module s'enfiche mécaniquement.
+**Changements suite à ta relecture** :
+- **Le texte-guide en sérigraphie a été retiré** — repères de composants standards uniquement (U1L, U1R, SW1...).
+- **Carte bien plus compacte** : ~68×101mm au lieu de 130×145mm.
+- Pas de keepout sur cette carte : pas de nRF24 ici, l'ESP-NOW utilise l'antenne intégrée à la puce ESP32 elle-même.
+
+**U1 est un vrai port femelle** : deux barrettes `PinSocket_1x19` (U1L/U1R, 38 broches au total, entraxe 22,86mm — la dimension déjà notée dans `hardware/boitier_buzzer_equipe.scad` pour ce module). Seules 4 des 38 positions physiques sont câblées (GPIO4, GPIO13, VIN, GND) ; les 34 autres sont présentes uniquement pour que le module s'enfiche mécaniquement.
 
 ⚠️ **Brochage à vérifier sur le module reçu avant de souder** : contrairement à la carte hub (ESP32 DevKit V1 30 broches, un modèle de référence unique et confirmé par toi), les cartes ESP32 38 broches existent en plusieurs variantes de brochage chez différents fabricants. J'ai utilisé la disposition générique la plus courante ("style NodeMCU-32S", vérifiée sur https://www.espboards.dev/esp32/esp32-38pin-devkit-generic/) : broche réelle 32 = GPIO4, broche 15 = GPIO13, broche 19 = VIN, broche 14 = GND. **Compare ces numéros avec les repères imprimés sur ton module avant de souder** — si ça ne correspond pas, il suffit de déplacer les 4 fils, la carte elle-même n'a pas besoin d'être refaite.
 
-- Bloc "BROCHAGE" en bas de carte + rappel du canal ESPNOW_WIFI_CHANNEL.
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 29 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 7 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano) — 0 `track_dangling` (un résidu initial identifié et supprimé après vérification de la topologie réelle).
+**Résultat** : 26 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 7 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano) — **0 track_dangling** dès le premier autoroutage.
 
 ## Prochaine étape
 

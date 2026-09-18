@@ -25,19 +25,22 @@ L'ERC (`Inspecter > Vérification des règles électriques`) remonte 72 avertiss
 | `no_connect_dangling` | 1 | Le marqueur "pas de connexion" sur la broche IRQ du module nRF24 (non utilisée par le firmware) est légèrement décalé — à recaler d'un clic sur la broche. |
 | `power_pin_not_driven` / `pin_not_driven` | 4 + 3 | Également présent dans `quizkicad/mega` (3 occurrences de `power_pin_not_driven`) — nuance ERC normale sur les réseaux GND, pas un bug. |
 
-## PCB : placement + sérigraphie + pistes routées
+## PCB : placement compact + pistes routées
 
-`buzzer_equipe_nano.kicad_pcb` : empreintes placées, texte de sérigraphie pour guider le soudage, **et pistes routées** — 2 couches (F.Cu/B.Cu), autoroutées avec [Freerouting](https://freerouting.app/) (outil open source dédié, pas un routage "deviné" à la main par moi) puis réimportées dans KiCad, le tout vérifié avec `kicad-cli pcb drc` réel.
+`buzzer_equipe_nano.kicad_pcb` : empreintes placées, **et pistes routées** — 2 couches (F.Cu/B.Cu), autoroutées avec [Freerouting](https://freerouting.app/) (outil open source dédié, pas un routage "deviné" à la main par moi) puis réimportées dans KiCad, le tout vérifié avec `kicad-cli pcb drc` réel.
 
-- Chaque composant porte son repère (A1L/A1R, J1, C1...) et une valeur/note sur son propre texte de sérigraphie.
-- Un bloc "BROCHAGE" en bas de la carte reprend toutes les correspondances de broches (ex. `J1 nRF24 PA+LNA (2x4) -- VERIFIER sur le module: 1 GND 2 VCC(3V3) 3 CE 4 CSN...`).
-- **Le Nano est représenté par de vrais ports femelles** : deux barrettes `PinSocket_1x15` séparées (A1L = broches réelles 1-15, A1R = 16-30, espacées de 15,24mm comme sur un vrai Nano) — pas l'empreinte "Nano soudé directement" d'avant. Le Nano s'enfiche dessus, rien à souder sur le module lui-même. Numérotation vérifiée broche par broche contre la vraie empreinte `Module:Arduino_Nano` (broche 16 en bas, broche 30 en haut de la colonne droite).
-- **J1 (nRF24) est maintenant un connecteur femelle 2×4** (`PinSocket_2x04`), pour le module PA+LNA que tu as confirmé. Broches 1=GND et 2=VCC réparties sur la 1ère rangée, puis CE/CSN, SCK/MOSI, MISO/IRQ sur les 3 rangées suivantes — c'est l'ordre le plus souvent publié pour ce type de module, mais **aucun standard universel n'existe pour les variantes PA+LNA** (contrairement au module simple 1×8). ⚠️ **Vérifie les repères imprimés sur ton module avant de souder** — s'ils ne correspondent pas à l'ordre ci-dessus, il suffit de recâbler les 8 fils, pas de refaire la carte.
-- Aperçu : `apercu_pcb.png` (rendu réel via `kicad-cli pcb render` — les pistes visibles sur ce rendu sont uniquement celles de la face du dessus, les pistes côté B.Cu n'apparaissent pas sur cette vue).
+**Changements suite à ta relecture** :
+- **Le texte-guide en sérigraphie a été retiré** — ça n'a pas sa place gravé sur un vrai circuit fabriqué. Il ne reste que les repères de composants standards (A1L, J1, C1...), comme sur n'importe quelle carte.
+- **Carte bien plus compacte** : ~90×100mm au lieu de 125×145mm — composants resserrés, plus d'espace perdu.
+- **C1 (découplage nRF24) déplacé juste à côté de J1** (~10-12mm au lieu de ~30mm) pour un découplage propre.
+- **Zone sans cuivre sous le nRF24** : un keepout (pistes/vias/plans interdits, sur les deux couches F.Cu et B.Cu) couvre l'espace où le corps/l'antenne du module PA+LNA se trouve une fois enfiché — pour ne pas mettre de cuivre sous l'antenne. Positionné en "presqu'île" contre le bord droit de la carte (rien ne route à travers), pas collé sur J1 des deux côtés — une première tentative avait bloqué le routeur (8 pistes bloquées après 100+ passes) en enfermant le connecteur ; corrigé en laissant un côté totalement ouvert. **Vérifié réellement respecté par Freerouting** (pas juste accepté par KiCad) via un test dédié où un keepout bloquant délibérément le seul chemin entre 2 pastilles a fait router 0 piste par l'autorouteur — preuve qu'il n'était pas ignoré. Taille/position à vérifier/ajuster dans KiCad selon les dimensions réelles de ton module.
+- **Le Nano est représenté par de vrais ports femelles** : deux barrettes `PinSocket_1x15` séparées (A1L = broches réelles 1-15, A1R = 16-30, espacées de 15,24mm comme sur un vrai Nano). Le Nano s'enfiche dessus, rien à souder sur le module lui-même.
+- **J1 (nRF24) est un connecteur femelle 2×4** (`PinSocket_2x04`), pour le module PA+LNA confirmé. Broches 1=GND et 2=VCC sur la 1ère rangée, puis CE/CSN, SCK/MOSI, MISO/IRQ — ordre le plus souvent publié pour ce type de module, mais **aucun standard universel n'existe pour les variantes PA+LNA**. ⚠️ **Vérifie les repères imprimés sur ton module avant de souder.**
+- Aperçu : `apercu_pcb.png`.
 
-**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 59 connexions, **0 violation de clearance, 0 élément non connecté**.
+**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 49 connexions, **0 violation de clearance, 0 élément non connecté**, keepout respecté (0 piste dedans, vérifié par script).
 
-**DRC final** : 9 avertissements, tous `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`). Les résidus d'autorouter (`track_dangling`, tronçons en double qui ne menaient à aucune pastille) ont été identifiés et supprimés via script `pcbnew` en vérifiant d'abord la topologie réelle (ne pas casser une piste utile), puis revérifiés avec `kicad-cli pcb drc` — **0 track_dangling restant**.
+**DRC final** : 9 avertissements, tous `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`) — **0 track_dangling** dès le premier autoroutage cette fois.
 
 **À vérifier toi-même avant fabrication** : largeur de piste/clearance par défaut de KiCad (pas de netclass personnalisée définie ici) — correcte pour du signal logique, mais à confirmer sur les nets d'alimentation (`VCC_5V_SW`, `GND`) selon le courant réel du vibreur.
 
