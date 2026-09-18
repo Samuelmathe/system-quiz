@@ -30,12 +30,12 @@ L'ERC (`Inspecter > Vérification des règles électriques`) remonte 72 avertiss
 
 **Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 73 connexions, **0 violation de clearance, 0 élément non connecté**.
 
-**DRC final** : 9 avertissements — 7 `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`) + 2 `track_dangling` (petit résidu de l'autorouter, un bout de piste sans issue sur une seule net — à nettoyer avec `Outils > Nettoyer les pistes et les vias`, aucun impact électrique puisque 0 net n'est incomplet).
+**DRC final** : 7 avertissements, tous `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`). Les 2 `track_dangling` initiaux (un résidu de l'autorouter sur le net `NRF_SCK`, un tronçon en double qui ne menait à aucune pastille) ont été identifiés et supprimés via script `pcbnew`, puis revérifiés avec `kicad-cli pcb drc` — **0 track_dangling restant**.
 
 **À vérifier toi-même avant fabrication** : largeur de piste/clearance par défaut de KiCad (pas de netclass personnalisée définie ici) — correcte pour du signal logique, mais à confirmer sur les nets d'alimentation (`VCC_5V_SW`, `GND`) selon le courant réel du vibreur.
 
 ## Prochaine étape
 
-Ouvre `buzzer_equipe_nano.kicad_pcb` dans KiCad, nettoie les 2 `track_dangling` et relis le routage à l'œil (largeurs de piste, trajets) avant de passer aux fichiers de fabrication (Gerbers).
+Ouvre `buzzer_equipe_nano.kicad_pcb` dans KiCad et relis le routage à l'œil (largeurs de piste, trajets) avant de passer aux fichiers de fabrication (Gerbers).
 
 La version ESP32 (secours équipe) est dans `../kicad_buzzer_esp32/`, même méthode.

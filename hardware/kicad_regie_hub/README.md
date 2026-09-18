@@ -49,10 +49,10 @@ Même profil que les deux cartes buzzer, déjà expliqué en détail dans `../ki
 - Bloc "BROCHAGE" en bas de carte reprenant tout le tableau de brochage ci-dessus, plus un rappel que le shield DMX existant s'empile sur la Mega, pas sur cette carte.
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 61 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 1 via placée. DRC final : 13 avertissements — 11 `lib_footprint_mismatch` (cosmétique) + 2 `track_dangling` (résidu d'autorouter, à nettoyer avec `Outils > Nettoyer les pistes et les vias`, sans impact électrique).
+**Résultat** : 58 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 1 via placée. DRC final : 11 avertissements, tous `lib_footprint_mismatch` (cosmétique). Les 2 `track_dangling` initiaux (résidu d'autorouter sur `VCC_5V_MEGA`) ont été supprimés via script `pcbnew` puis revérifiés — **0 track_dangling restant**.
 
-**Point à vérifier toi-même** : le routage automatique ne sait pas prioriser "au plus près" pour C3 (condensateur de découplage nRF24, `cl.md` demande qu'il soit proche du module) — vérifie à l'œil que la piste C3↔J_NRF reste courte et directe, sinon rapproche C3 de J_NRF et relance juste cette piste à la main.
+**C3 (découplage nRF24) rapproché de J_NRF** : le placement initial mettait C3 à 25mm de J_NRF (net `NRF_VCC_DEDIE`, qui relie aussi C2 et U_REG — ce n'est pas un simple lien à 2 broches). Trop loin pour un découplage propre à 2,4GHz. C3 a été repositionné à 12mm de J_NRF (`(152,20)` au lieu de `(165,20)`) et la carte entièrement re-routée : la piste J_NRF↔C3 est maintenant un tronçon direct et court, visible sur `apercu_pcb.png`.
 
 ## Prochaine étape
 
-Ouvre le PCB dans KiCad, nettoie les 2 `track_dangling`, vérifie C3↔J_NRF (voir ci-dessus), puis passe aux fichiers de fabrication (Gerbers) — en particulier bien respecter les recommandations `cl.md` (VCC nRF24 en 3,3V uniquement jamais 5V, GND commun).
+Ouvre le PCB dans KiCad et relis le routage à l'œil, puis passe aux fichiers de fabrication (Gerbers) — en particulier bien respecter les recommandations `cl.md` (VCC nRF24 en 3,3V uniquement jamais 5V, GND commun).
