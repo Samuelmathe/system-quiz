@@ -3312,7 +3312,7 @@
 			(justify left)
 		)
 	)
-	(gr_text "REGIE/HUB -- ADAPTATEUR MEGA + ESP32 + nRF24 -- placement + reperes seulement\nROUTAGE DES PISTES A FAIRE A LA MAIN DANS KICAD -- pas de batterie, alimente par la Mega"
+	(gr_text "REGIE/HUB -- ADAPTATEUR MEGA + ESP32 + nRF24 -- pistes routees (Freerouting) -- pas de batterie, alimente par la Mega"
 		(at 8 9 0)
 		(layer "F.SilkS")
 		(uuid "c399a866-3655-4766-bac6-7ee8ff0f8d4a")

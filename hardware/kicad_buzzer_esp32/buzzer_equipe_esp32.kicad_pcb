@@ -2115,7 +2115,7 @@
 			(justify left)
 		)
 	)
-	(gr_text "BUZZER EQUIPE -- ESP32 (ESP-NOW, secours) -- placement + reperes seulement\nROUTAGE DES PISTES A FAIRE A LA MAIN DANS KICAD"
+	(gr_text "BUZZER EQUIPE -- ESP32 (ESP-NOW, secours) -- pistes routees (Freerouting), a relire avant fabrication"
 		(at 8 9 0)
 		(layer "F.SilkS")
 		(uuid "b1b2d629-4244-471c-bb71-0a6e5b8fe5b7")
