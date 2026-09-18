@@ -39,6 +39,7 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 - **Le texte-guide en sérigraphie a été retiré** — repères de composants standards uniquement (U1L, U1R, SW1...).
 - **Carte bien plus compacte** : ~68×101mm au lieu de 130×145mm.
 - Pas de keepout sur cette carte : pas de nRF24 ici, l'ESP-NOW utilise l'antenne intégrée à la puce ESP32 elle-même.
+- **SW1, SW2, J2, J3, BT1 (connecteurs "fils volants") sont maintenant en CMS** (empreintes SMD), par choix explicite pour un assemblage machine (PCBA) chez le fabricant. Même numérotation de broche qu'avant. **Restent traversants** : U1L/U1R (le module ESP32 s'enfiche dessus).
 
 **U1 est un vrai port femelle** : deux barrettes `PinSocket_1x19` (U1L/U1R, 38 broches au total, entraxe 22,86mm — la dimension déjà notée dans `hardware/boitier_buzzer_equipe.scad` pour ce module). Seules 4 des 38 positions physiques sont câblées (GPIO4, GPIO13, VIN, GND) ; les 34 autres sont présentes uniquement pour que le module s'enfiche mécaniquement.
 
@@ -46,7 +47,7 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 26 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 7 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano) — **0 track_dangling** dès le premier autoroutage.
+**Résultat** : 34 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 2 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano). 1 `track_dangling` initial (résidu d'autorouter) identifié et supprimé après vérification de la topologie réelle — **0 track_dangling restant**.
 
 ## Prochaine étape
 
