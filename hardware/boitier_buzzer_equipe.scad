@@ -53,6 +53,18 @@ batterie_esp32_l  = 50;   // 1000-1200 mAh, typique — bien plus grande
 batterie_esp32_p  = 34;
 batterie_esp32_h  = 7;
 
+// Module charge+protection+boost 3-en-1 ("Type-C USB 5V Step-Up Booster
+// Lithium Battery Charging and Protection Module for Power Bank", ex.
+// réf. 134N3P) — loge DANS L'ÉTAGE BATTERIE, à côté de la cellule (câblage
+// BAT+/BAT- en parallèle sur la batterie, sortie 5V/GND remonte par la
+// fente de passage de câbles jusqu'à J2 sur le PCB). Placé côte à côte
+// avec la batterie le long de la largeur -- dimensions estimées
+// génériques pour ce type de module, À REMESURER sur le module réellement
+// reçu (elles varient pas mal d'un vendeur à l'autre).
+module_charge_l = 26;   // longueur (mm)
+module_charge_p = 18;   // largeur (mm)
+module_charge_h = 6;    // épaisseur, composants compris (mm)
+
 // Bouton "BUZZ" — type arcade, gros et satisfaisant à presser (pas un petit
 // bouton tactile 6mm) : diamètre de perçage à ajuster selon le bouton choisi
 bouton_diametre  = 24;
@@ -83,15 +95,22 @@ bat_l        = (VARIANTE == "esp32") ? batterie_esp32_l   : batterie_nano_l;
 bat_p        = (VARIANTE == "esp32") ? batterie_esp32_p   : batterie_nano_p;
 bat_h        = (VARIANTE == "esp32") ? batterie_esp32_h   : batterie_nano_h;
 
+// Empreinte de l'étage batterie = batterie + module charge côte à côte
+// (le long de la largeur), pas juste la batterie seule -- sinon le module
+// ne rentre pas à côté d'elle dans la trappe du bas.
+etage_bat_largeur  = bat_p + module_charge_p + jeu;
+etage_bat_longueur = max(bat_l, module_charge_l);
+etage_bat_hauteur  = max(bat_h, module_charge_h);
+
 // Étages empilés (pas côte à côte) -> l'empreinte extérieure commune est
 // la plus grande des deux compartiments, dans chaque dimension.
-interieur_largeur  = max(pcb_largeur, bat_p) + 2*jeu;
-interieur_longueur = max(pcb_longueur, bat_l) + 2*jeu;
+interieur_largeur  = max(pcb_largeur, etage_bat_largeur) + 2*jeu;
+interieur_longueur = max(pcb_longueur, etage_bat_longueur) + 2*jeu;
 exterieur_largeur  = interieur_largeur  + 2*epaisseur_paroi;
 exterieur_longueur = interieur_longueur + 2*epaisseur_paroi;
 
 hauteur_etage_pcb      = hauteur_headers;
-hauteur_etage_batterie = bat_h + 2*jeu + 2; // +2mm de marge de manoeuvre
+hauteur_etage_batterie = etage_bat_hauteur + 2*jeu + 2; // +2mm de marge de manoeuvre
 
 $fn = 48; // résolution des cercles/cylindres
 
