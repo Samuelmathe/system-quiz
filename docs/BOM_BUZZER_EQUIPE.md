@@ -26,8 +26,18 @@ Câblage simplifié (identique sur les deux cartes) :
 |---|---|---|
 | Batterie LiPo 1S 3,7V | Voir capacité par carte ci-dessous | Alimentation |
 | Connecteur batterie | JST-PH 2 points | Standard LiPo, polarité gardée |
-| Module charge + protection | TP4056 + DW01A/FS8205A, **variante USB-C** | Charge + coupure basse tension automatique (~2,4-3,0V) + protection surcharge/court-circuit |
-| Boost 5V | Module boost LiPo→5V (ex. base MT3608) — souvent intégré au module TP4056 ci-dessus en version combinée | Tension stable 5V quelle que soit la charge de la batterie |
+| Module charge + protection | TP4056 **ou TP4057** (version améliorée, protection inversion de polarité en plus) + DW01A/FS8205A, **variante USB-C** | Charge + coupure basse tension automatique (~2,4-3,0V) + protection surcharge/court-circuit |
+| Boost 5V | Module boost LiPo→5V (ex. base MT3608) | Tension stable 5V quelle que soit la charge de la batterie |
+
+⚠️ **Le module charge (TP4056/TP4057) et le boost 5V sont deux fonctions distinctes** — certaines cartes combinées ("3 en 1") intègrent les deux sur le même petit PCB, d'autres non. **Vérifié pour le TP4057 en particulier : c'est une puce de charge pure, sans fonction boost.** Si ton module ne fait que charge+protection, il faut un second module boost séparé. Câblage dans ce cas :
+
+```
+Batterie (+/-) ──┬──▶ Module TP4057 (bornes BAT) — charge/protection, en parallèle
+                  └──▶ Entrée du module boost — aussi en parallèle
+Sortie du module boost (5V) ──▶ J2 broches 3/4 sur le PCB
+```
+
+Ça ne change rien au PCB (J2 reste 4 broches : BAT+, BAT-, 5V+, 5V-) — juste la façon dont les modules externes se câblent entre eux avant de rejoindre J2.
 | Interrupteur | Glissière ou bouton-poussoir à verrouillage, sur la ligne 5V après le boost | Éteindre complètement entre deux events — sans lui l'autonomie 4-6h ne veut plus rien dire si le boîtier reste allumé par oubli |
 | Indicateur niveau batterie | Module "1S lithium battery capacity indicator", 4 LED (25/50/75/100%) | Branché directement en parallèle sur la batterie (2 fils B+/B-, ~5mA, toujours actif, pas de bouton) — repère `BATLED` sur le PCB |
 
