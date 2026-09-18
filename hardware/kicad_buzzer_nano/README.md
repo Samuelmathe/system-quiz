@@ -23,14 +23,15 @@ L'ERC (`Inspecter > Vérification des règles électriques`) remonte 72 avertiss
 
 `buzzer_equipe_nano.kicad_pcb` : empreintes placées, texte de sérigraphie pour guider le soudage, **et pistes routées** — 2 couches (F.Cu/B.Cu), autoroutées avec [Freerouting](https://freerouting.app/) (outil open source dédié, pas un routage "deviné" à la main par moi) puis réimportées dans KiCad, le tout vérifié avec `kicad-cli pcb drc` réel.
 
-- Chaque composant porte son repère (A1, J1, C1...) et une valeur/note sur son propre texte de sérigraphie.
+- Chaque composant porte son repère (A1L/A1R, J1, C1...) et une valeur/note sur son propre texte de sérigraphie.
 - Un bloc "BROCHAGE" en bas de la carte reprend toutes les correspondances de broches (ex. `J1 nRF24: 1 VCC(3V3) 2 GND 3 CE 4 CSN...`).
-- Nano et nRF24 en connecteurs femelles (empreinte `Module:Arduino_Nano`, dimensions/trous identiques que le Nano soit soudé directement ou reçu par un header femelle).
+- **Le Nano est représenté par de vrais ports femelles** : deux barrettes `PinSocket_1x15` séparées (A1L = broches réelles 1-15, A1R = 16-30, espacées de 15,24mm comme sur un vrai Nano) — pas l'empreinte "Nano soudé directement" d'avant. Le Nano s'enfiche dessus, rien à souder sur le module lui-même. Numérotation vérifiée broche par broche contre la vraie empreinte `Module:Arduino_Nano` (broche 16 en bas, broche 30 en haut de la colonne droite).
+- nRF24 déjà en connecteur femelle `PinSocket_1x08`.
 - Aperçu : `apercu_pcb.png` (rendu réel via `kicad-cli pcb render` — les pistes visibles sur ce rendu sont uniquement celles de la face du dessus, les pistes côté B.Cu n'apparaissent pas sur cette vue).
 
-**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 73 connexions, **0 violation de clearance, 0 élément non connecté**.
+**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 58 connexions, **0 violation de clearance, 0 élément non connecté**.
 
-**DRC final** : 7 avertissements, tous `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`). Les 2 `track_dangling` initiaux (un résidu de l'autorouter sur le net `NRF_SCK`, un tronçon en double qui ne menait à aucune pastille) ont été identifiés et supprimés via script `pcbnew`, puis revérifiés avec `kicad-cli pcb drc` — **0 track_dangling restant**.
+**DRC final** : 9 avertissements, tous `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`). Les résidus d'autorouter (`track_dangling`, tronçons en double qui ne menaient à aucune pastille) ont été identifiés et supprimés via script `pcbnew` en vérifiant d'abord la topologie réelle (ne pas casser une piste utile), puis revérifiés avec `kicad-cli pcb drc` — **0 track_dangling restant**.
 
 **À vérifier toi-même avant fabrication** : largeur de piste/clearance par défaut de KiCad (pas de netclass personnalisée définie ici) — correcte pour du signal logique, mais à confirmer sur les nets d'alimentation (`VCC_5V_SW`, `GND`) selon le courant réel du vibreur.
 

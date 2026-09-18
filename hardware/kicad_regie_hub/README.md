@@ -45,11 +45,12 @@ Même profil que les deux cartes buzzer, déjà expliqué en détail dans `../ki
 
 `regie_hub_mega_esp32.kicad_pcb` : empreintes placées, sérigraphie, **et pistes routées** — même pipeline que les deux cartes buzzer (Freerouting en CLI headless + réimport KiCad + `kicad-cli pcb drc` réel), voir `../kicad_buzzer_nano/README.md` pour le détail.
 
-- Chaque composant (J_MEGA, U_ESP32, J_NRF, U_REG, R1-R4, C1-C3) porte son repère + une note sur sa propre sérigraphie (ex. R1 "1k (diviseur TX2, série)").
-- Bloc "BROCHAGE" en bas de carte reprenant tout le tableau de brochage ci-dessus, plus un rappel que le shield DMX existant s'empile sur la Mega, pas sur cette carte.
+- Chaque composant (J_MEGA, U_ESP32L/R, J_NRF, U_REG, R1-R4, C1-C3) porte son repère + une note sur sa propre sérigraphie (ex. R1 "1k (diviseur TX2, série)").
+- **U_ESP32 est maintenant un vrai port femelle** : deux barrettes `PinSocket_1x15` (U_ESP32L/R, 30 broches au total, entraxe 15,24mm), pas le connecteur 12 broches abstrait d'avant. Seules 11 des 30 positions physiques sont câblées ; les 19 autres sont présentes pour que le module s'enfiche mécaniquement. Brochage : **DOIT ESP32 DevKit V1, 30 broches** — exactement le modèle que tu as confirmé avoir commandé ("esp32 devkit v1 ft232 30 pins"), un design de référence unique et bien plus standardisé que les clones 38 broches (vérifié sur https://www.espboards.dev/esp32/esp32doit-devkit-v1/). Vérifie quand même les repères GPIO imprimés sur ton module avant de souder, comme toujours avec un clone.
+- Bloc "BROCHAGE" en bas de carte reprenant tout le tableau de brochage ci-dessus (broches réelles, pas les anciens numéros abstraits 1-12), plus un rappel que le shield DMX existant s'empile sur la Mega, pas sur cette carte.
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 58 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 1 via placée. DRC final : 11 avertissements, tous `lib_footprint_mismatch` (cosmétique). Les 2 `track_dangling` initiaux (résidu d'autorouter sur `VCC_5V_MEGA`) ont été supprimés via script `pcbnew` puis revérifiés — **0 track_dangling restant**.
+**Résultat** : 54 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 1 via placée. DRC final : 12 avertissements, tous `lib_footprint_mismatch` (cosmétique) — **0 track_dangling** dès le premier autoroutage cette fois.
 
 **C3 (découplage nRF24) rapproché de J_NRF** : le placement initial mettait C3 à 25mm de J_NRF (net `NRF_VCC_DEDIE`, qui relie aussi C2 et U_REG — ce n'est pas un simple lien à 2 broches). Trop loin pour un découplage propre à 2,4GHz. C3 a été repositionné à 12mm de J_NRF (`(152,20)` au lieu de `(165,20)`) et la carte entièrement re-routée : la piste J_NRF↔C3 est maintenant un tronçon direct et court, visible sur `apercu_pcb.png`.
 
