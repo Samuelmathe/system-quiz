@@ -39,7 +39,8 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 - **Le texte-guide en sérigraphie a été retiré** — repères de composants standards uniquement (U1L, U1R, SW1...).
 - **Carte bien plus compacte** : ~68×101mm au lieu de 130×145mm.
 - Pas de keepout sur cette carte : pas de nRF24 ici, l'ESP-NOW utilise l'antenne intégrée à la puce ESP32 elle-même.
-- **SW1, SW2, J2, J3, BT1 (connecteurs "fils volants") sont maintenant en CMS** (empreintes SMD), par choix explicite pour un assemblage machine (PCBA) chez le fabricant. Même numérotation de broche qu'avant. **Restent traversants** : U1L/U1R (le module ESP32 s'enfiche dessus).
+- **SW1, SW2, J2, J3 (connecteurs "fils volants") sont maintenant en CMS** (empreintes SMD), par choix explicite pour un assemblage machine (PCBA) chez le fabricant. Même numérotation de broche qu'avant. **Restent traversants** : U1L/U1R (le module ESP32 s'enfiche dessus) et **BT1**.
+- **BT1 (batterie) est un vrai connecteur JST-PH** (`JST_PH_B2B-PH-K`, mâle, traversant) — même raisonnement que la carte Nano (voir son README) : la batterie a déjà une prise femelle sertie sur ses fils, et ce connecteur encaisse des cycles de branchement/débranchement qu'un pad CMS ne supporterait pas. Broche 1 = + (rouge), broche 2 = − (noir) — **vérifie la polarité sur ta batterie reçue**.
 
 **U1 est un vrai port femelle** : deux barrettes `PinSocket_1x19` (U1L/U1R, 38 broches au total, entraxe 22,86mm — la dimension déjà notée dans `hardware/boitier_buzzer_equipe.scad` pour ce module). Seules 4 des 38 positions physiques sont câblées (GPIO4, GPIO13, VIN, GND) ; les 34 autres sont présentes uniquement pour que le module s'enfiche mécaniquement.
 
@@ -47,7 +48,7 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 34 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 2 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano). 1 `track_dangling` initial (résidu d'autorouter) identifié et supprimé après vérification de la topologie réelle — **0 track_dangling restant**.
+**Résultat** : 36 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 3 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano). 2 `track_dangling` initiaux (résidus d'autorouter) identifiés et supprimés après vérification de la topologie réelle — **0 track_dangling restant**.
 
 ## Prochaine étape
 
