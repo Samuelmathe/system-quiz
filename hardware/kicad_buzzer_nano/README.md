@@ -19,19 +19,23 @@ L'ERC (`Inspecter > Vérification des règles électriques`) remonte 72 avertiss
 | `no_connect_dangling` | 1 | Le marqueur "pas de connexion" sur la broche IRQ du module nRF24 (non utilisée par le firmware) est légèrement décalé — à recaler d'un clic sur la broche. |
 | `power_pin_not_driven` / `pin_not_driven` | 4 + 3 | Également présent dans `quizkicad/mega` (3 occurrences de `power_pin_not_driven`) — nuance ERC normale sur les réseaux GND, pas un bug. |
 
-## PCB : placement + repères de sérigraphie (routage à faire à la main)
+## PCB : placement + sérigraphie + pistes routées
 
-`buzzer_equipe_nano.kicad_pcb` : empreintes placées + texte de sérigraphie pour guider le soudage — **pas de routage des pistes** (à faire toi-même dans KiCad, décision explicite : c'est un travail visuel qu'il vaut mieux faire dans l'éditeur, pas générer à l'aveugle).
+`buzzer_equipe_nano.kicad_pcb` : empreintes placées, texte de sérigraphie pour guider le soudage, **et pistes routées** — 2 couches (F.Cu/B.Cu), autoroutées avec [Freerouting](https://freerouting.app/) (outil open source dédié, pas un routage "deviné" à la main par moi) puis réimportées dans KiCad, le tout vérifié avec `kicad-cli pcb drc` réel.
 
 - Chaque composant porte son repère (A1, J1, C1...) et une valeur/note sur son propre texte de sérigraphie.
 - Un bloc "BROCHAGE" en bas de la carte reprend toutes les correspondances de broches (ex. `J1 nRF24: 1 VCC(3V3) 2 GND 3 CE 4 CSN...`).
 - Nano et nRF24 en connecteurs femelles (empreinte `Module:Arduino_Nano`, dimensions/trous identiques que le Nano soit soudé directement ou reçu par un header femelle).
-- Aperçu : `apercu_pcb.png` (rendu réel via `kicad-cli pcb render`).
+- Aperçu : `apercu_pcb.png` (rendu réel via `kicad-cli pcb render` — les pistes visibles sur ce rendu sont uniquement celles de la face du dessus, les pistes côté B.Cu n'apparaissent pas sur cette vue).
 
-**DRC (`kicad-cli pcb drc`)** : 7 avertissements, tous `lib_footprint_mismatch` (cosmétique — même catégorie que `lib_symbol_mismatch` sur le schéma, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`). 20 éléments "non connectés" = normal et attendu, c'est le ratsnest de toutes les connexions qui n'ont pas encore de piste.
+**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 73 connexions, **0 violation de clearance, 0 élément non connecté**.
+
+**DRC final** : 9 avertissements — 7 `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`) + 2 `track_dangling` (petit résidu de l'autorouter, un bout de piste sans issue sur une seule net — à nettoyer avec `Outils > Nettoyer les pistes et les vias`, aucun impact électrique puisque 0 net n'est incomplet).
+
+**À vérifier toi-même avant fabrication** : largeur de piste/clearance par défaut de KiCad (pas de netclass personnalisée définie ici) — correcte pour du signal logique, mais à confirmer sur les nets d'alimentation (`VCC_5V_SW`, `GND`) selon le courant réel du vibreur.
 
 ## Prochaine étape
 
-Une fois ces points nettoyés dans l'interface KiCad, passez à l'attribution des empreintes (`Outils > Attribuer les empreintes`) puis au routage du PCB — c'est le vrai travail visuel qui doit se faire dans KiCad, pas quelque chose que je peux générer en texte.
+Ouvre `buzzer_equipe_nano.kicad_pcb` dans KiCad, nettoie les 2 `track_dangling` et relis le routage à l'œil (largeurs de piste, trajets) avant de passer aux fichiers de fabrication (Gerbers).
 
 La version ESP32 (secours équipe) est dans `../kicad_buzzer_esp32/`, même méthode.

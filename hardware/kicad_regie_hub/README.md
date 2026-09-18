@@ -41,16 +41,18 @@ Même profil que les deux cartes buzzer, déjà expliqué en détail dans `../ki
 | `no_connect_dangling` | 2 | Marqueurs "pas de connexion" légèrement décalés — à recaler d'un clic |
 | `power_pin_not_driven` | 1 | Normal sur un réseau GND (également présent dans `quizkicad/mega`) |
 
-## PCB : placement + repères de sérigraphie (routage à faire à la main)
+## PCB : placement + sérigraphie + pistes routées
 
-`regie_hub_mega_esp32.kicad_pcb` : empreintes placées + texte de sérigraphie pour guider le soudage — **pas de routage des pistes** (travail visuel laissé à faire dans KiCad).
+`regie_hub_mega_esp32.kicad_pcb` : empreintes placées, sérigraphie, **et pistes routées** — même pipeline que les deux cartes buzzer (Freerouting en CLI headless + réimport KiCad + `kicad-cli pcb drc` réel), voir `../kicad_buzzer_nano/README.md` pour le détail.
 
 - Chaque composant (J_MEGA, U_ESP32, J_NRF, U_REG, R1-R4, C1-C3) porte son repère + une note sur sa propre sérigraphie (ex. R1 "1k (diviseur TX2, série)").
 - Bloc "BROCHAGE" en bas de carte reprenant tout le tableau de brochage ci-dessus, plus un rappel que le shield DMX existant s'empile sur la Mega, pas sur cette carte.
 - Aperçu : `apercu_pcb.png`.
 
-**DRC** : 11 avertissements, tous `lib_footprint_mismatch` (cosmétique, même catégorie que sur les deux cartes buzzer). 27 éléments non connectés = normal (ratsnest sans routage, 14 nets).
+**Résultat** : 61 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 1 via placée. DRC final : 13 avertissements — 11 `lib_footprint_mismatch` (cosmétique) + 2 `track_dangling` (résidu d'autorouter, à nettoyer avec `Outils > Nettoyer les pistes et les vias`, sans impact électrique).
+
+**Point à vérifier toi-même** : le routage automatique ne sait pas prioriser "au plus près" pour C3 (condensateur de découplage nRF24, `cl.md` demande qu'il soit proche du module) — vérifie à l'œil que la piste C3↔J_NRF reste courte et directe, sinon rapproche C3 de J_NRF et relance juste cette piste à la main.
 
 ## Prochaine étape
 
-Routage — en particulier bien respecter les recommandations `cl.md` (VCC nRF24 en 3,3V uniquement jamais 5V, condensateur de découplage proche du module, GND commun).
+Ouvre le PCB dans KiCad, nettoie les 2 `track_dangling`, vérifie C3↔J_NRF (voir ci-dessus), puis passe aux fichiers de fabrication (Gerbers) — en particulier bien respecter les recommandations `cl.md` (VCC nRF24 en 3,3V uniquement jamais 5V, GND commun).
