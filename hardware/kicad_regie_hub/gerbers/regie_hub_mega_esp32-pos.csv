@@ -1,0 +1,13 @@
+Ref,Val,Package,PosX,PosY,Rot,Side
+"C1","~10uF decouplage entree regulateur - CMS","C_0805_2012Metric",30.000000,-65.000000,0.000000,top
+"C2","~10uF decouplage sortie regulateur - CMS","C_0805_2012Metric",46.000000,-65.000000,0.000000,top
+"C3","10-100uF decouplage nRF24 (obligatoire, au plus pres) - CMS","C_0805_2012Metric",82.000000,-19.000000,0.000000,top
+"J_MEGA","Vers Mega: TX2 RX2 TX3 RX3 5V GND","PinSocket_1x06_P2.54mm_Vertical",10.000000,-15.000000,0.000000,top
+"J_NRF","nRF24L01+PA+LNA (broches MALES, le module a des ports femelles) - VERIFIER le brochage sur le module recu","PinHeader_2x04_P2.54mm_Vertical",96.000000,-15.000000,0.000000,top
+"R1","1k (diviseur TX2, serie) - CMS","R_0805_2012Metric",30.000000,-15.000000,0.000000,top
+"R2","2k (diviseur TX2, vers GND) - CMS","R_0805_2012Metric",30.000000,-27.000000,0.000000,top
+"R3","1k (diviseur TX3, serie) - CMS","R_0805_2012Metric",30.000000,-39.000000,0.000000,top
+"R4","2k (diviseur TX3, vers GND) - CMS","R_0805_2012Metric",30.000000,-51.000000,0.000000,top
+"U_ESP32L","ESP32 DevKit V1 colonne gauche (broches 1-15)","PinSocket_1x15_P2.54mm_Vertical",52.000000,-15.000000,0.000000,top
+"U_ESP32R","ESP32 DevKit V1 colonne droite (broches 16-30)","PinSocket_1x15_P2.54mm_Vertical",67.240000,-15.000000,0.000000,top
+"U_REG","Regulateur 3.3V dedie (ex AMS1117-3.3)","PinSocket_1x03_P2.54mm_Vertical",60.000000,-65.000000,0.000000,top
