@@ -187,6 +187,22 @@ class QuizController:
         self.font_proj_podium_title: Optional[int] = None
         self.font_proj_podium_name: Optional[int] = None
         self.font_proj_podium_score: Optional[int] = None
+        # Le meme evenement peut tourner dans des salles/projecteurs tres
+        # differents d'une prestation a l'autre -- 3 paliers de taille de
+        # texte (au lieu d'une seule taille figee) pour s'adapter sans
+        # avoir a rouvrir le fichier de config a chaque fois.
+        self.proj_font_sizes: Dict[str, Dict[str, int]] = {
+            "petit":  {"timer": 80,  "team": 38, "ecoute": 22, "points": 29,
+                       "podium_title": 26, "podium_name": 32, "podium_score": 20},
+            "moyen":  {"timer": 130, "team": 62, "ecoute": 36, "points": 47,
+                       "podium_title": 42, "podium_name": 52, "podium_score": 32},
+            "grand":  {"timer": 200, "team": 96, "ecoute": 56, "points": 72,
+                       "podium_title": 64, "podium_name": 80, "podium_score": 48},
+        }
+        self.proj_fonts: Dict[str, Dict[str, int]] = {}
+        self.proj_font_tier = "grand"
+        self._proj_last_pos: Optional[Tuple[int, int]] = None
+        self._proj_last_size: Optional[Tuple[int, int]] = None
         self.public_display_open = False
 
         # Initialisation
@@ -355,11 +371,18 @@ class QuizController:
             # Couleurs d'équipe saisies par l'animateur — purement visuelles (aucun lien
             # avec le patch DMX du Mega / config_final_30.py) : {str(team_id): [r, g, b]}.
             "team_colors": {},
-            # Position/taille fenêtre projecteur (2e écran : souvent x=1920)
+            # Position/taille fenêtre projecteur (2e écran : souvent x=1920).
+            # Point de départ raisonnable seulement — la fenêtre est
+            # redimensionnable/déplaçable librement à la souris et se
+            # souvient automatiquement de la dernière taille/position
+            # utilisée (utile quand le projecteur change de salle en salle).
             "projector_x": 1920,
             "projector_y": 0,
             "projector_width": 1920,
             "projector_height": 1080,
+            # "petit" | "moyen" | "grand" — taille du texte sur l'écran
+            # public, à choisir selon la taille de la salle/du projecteur.
+            "projector_font_tier": "grand",
         }
         
         if os.path.exists(self.config_file):
@@ -1513,6 +1536,14 @@ class QuizController:
                     callback=self.toggle_public_display,
                     width=80,
                 )
+                dpg.add_spacer(width=4)
+                dpg.add_combo(
+                    tag="combo_proj_font_tier",
+                    items=["Petit", "Moyen", "Grand"],
+                    default_value=self.proj_font_tier.capitalize(),
+                    callback=self.projector_font_tier_callback,
+                    width=80,
+                )
                 dpg.add_spacer(width=8)
                 dpg.add_button(
                     label="Couleurs DMX...",
@@ -1636,7 +1667,11 @@ class QuizController:
             height=ph,
             show=False,
             no_title_bar=True,
-            no_resize=True,
+            # Redimensionnable/deplacable librement : le meme show peut
+            # tourner avec un projecteur different d'une salle a l'autre --
+            # voir sync_projector_geometry() qui recalcule la disposition
+            # et sauvegarde la derniere taille/position utilisee.
+            no_resize=False,
             no_move=False,
             no_collapse=True,
             no_close=True,
@@ -1651,22 +1686,7 @@ class QuizController:
                 no_scrollbar=True,
             ):
                 with dpg.group(tag="proj_view_buzz", show=False):
-                    dpg.add_spacer(height=max(60, ph // 7))
-                    with dpg.group(horizontal=True):
-                        dpg.add_spacer(width=max(80, pw // 10))
-                        dpg.add_text("", tag="txt_proj_team", color=[80, 180, 255])
-                    dpg.add_spacer(height=max(20, ph // 20))
-                    with dpg.group(horizontal=True):
-                        dpg.add_spacer(width=max(100, pw // 8))
-                        dpg.add_text("", tag="txt_proj_ecoute", color=[100, 220, 160])
-                    dpg.add_spacer(height=max(30, ph // 15))
-                    with dpg.group(horizontal=True):
-                        dpg.add_spacer(width=max(100, pw // 8))
-                        dpg.add_text("", tag="txt_proj_points", color=[255, 215, 80])
-                    dpg.add_spacer(height=max(40, ph // 12))
-                    with dpg.group(horizontal=True):
-                        dpg.add_spacer(width=max(60, pw // 10))
-                        dpg.add_text("", tag="txt_proj_timer", color=[255, 255, 255])
+                    pass
 
                 with dpg.group(tag="proj_view_podium", show=False):
                     with dpg.child_window(
@@ -1678,29 +1698,125 @@ class QuizController:
                     ):
                         pass
 
-        font_map = [
-            ("txt_proj_team", self.font_proj_team),
-            ("txt_proj_ecoute", self.font_proj_ecoute),
-            ("txt_proj_points", self.font_proj_points),
-            ("txt_proj_timer", self.font_proj_timer),
-        ]
-        for tag, font_id in font_map:
-            if font_id and dpg.does_item_exist(tag):
-                dpg.bind_item_font(tag, font_id)
+        self._build_proj_buzz_layout(pw, ph)
+        self._apply_projector_font_tier(self.proj_font_tier, persist=False)
+        self._proj_last_size = (pw, ph)
+        self._proj_last_pos = (
+            int(self.config.get("projector_x", 1920)),
+            int(self.config.get("projector_y", 0)),
+        )
+
+    def _build_proj_buzz_layout(self, pw: int, ph: int):
+        """(Re)construit les espacements de la vue « buzz », proportionnels
+        a la taille COURANTE de la fenetre publique -- appele a la creation
+        et a chaque redimensionnement (sync_projector_geometry), pour que
+        l'affichage reste centre/lisible quelle que soit la resolution du
+        projecteur du jour."""
+        if not dpg.does_item_exist("proj_view_buzz"):
+            return
+        dpg.delete_item("proj_view_buzz", children_only=True)
+        dpg.add_spacer(height=max(60, ph // 7), parent="proj_view_buzz")
+        with dpg.group(horizontal=True, parent="proj_view_buzz"):
+            dpg.add_spacer(width=max(80, pw // 10))
+            dpg.add_text("", tag="txt_proj_team", color=[80, 180, 255])
+        dpg.add_spacer(height=max(20, ph // 20), parent="proj_view_buzz")
+        with dpg.group(horizontal=True, parent="proj_view_buzz"):
+            dpg.add_spacer(width=max(100, pw // 8))
+            dpg.add_text("", tag="txt_proj_ecoute", color=[100, 220, 160])
+        dpg.add_spacer(height=max(30, ph // 15), parent="proj_view_buzz")
+        with dpg.group(horizontal=True, parent="proj_view_buzz"):
+            dpg.add_spacer(width=max(100, pw // 8))
+            dpg.add_text("", tag="txt_proj_points", color=[255, 215, 80])
+        dpg.add_spacer(height=max(40, ph // 12), parent="proj_view_buzz")
+        with dpg.group(horizontal=True, parent="proj_view_buzz"):
+            dpg.add_spacer(width=max(60, pw // 10))
+            dpg.add_text("", tag="txt_proj_timer", color=[255, 255, 255])
+
+    def sync_projector_geometry(self):
+        """Appele a chaque frame tant que l'ecran public est ouvert : suit
+        la taille/position REELLE de la fenetre (l'operateur peut la
+        redimensionner/deplacer librement a la souris, ex. pour l'adapter a
+        un projecteur d'une resolution differente d'une salle a l'autre).
+        En cas de changement : recalcule la disposition, rafraichit le
+        contenu affiche, et sauvegarde la nouvelle geometrie (reutilise
+        l'auto-save existant) -- aucune edition manuelle de
+        quiz_board_config.json necessaire d'une prestation a l'autre."""
+        if not self.public_display_open or not dpg.does_item_exist("projector_window"):
+            return
+        size = dpg.get_item_rect_size("projector_window")
+        pw, ph = int(size[0]), int(size[1])
+        if pw < 100 or ph < 100:
+            return
+        if self._proj_last_size != (pw, ph):
+            self._build_proj_buzz_layout(pw, ph)
+            self._apply_projector_font_tier(self.proj_font_tier, persist=False)
+            self.update_projector_display()
+            self._proj_last_size = (pw, ph)
+            self.config["projector_width"] = pw
+            self.config["projector_height"] = ph
+            self.save_pending = True
+
+        pos = dpg.get_item_pos("projector_window")
+        pos_i = (int(pos[0]), int(pos[1]))
+        if self._proj_last_pos != pos_i:
+            self._proj_last_pos = pos_i
+            self.config["projector_x"] = pos_i[0]
+            self.config["projector_y"] = pos_i[1]
+            self.save_pending = True
 
     def bind_projector_fonts(self):
-        """À appeler après création du font registry (dans main)."""
+        """À appeler après création du font registry (dans main). Construit
+        les 3 paliers de taille (petit/moyen/grand) une seule fois, puis
+        `_apply_projector_font_tier` bascule entre eux à la volée."""
         font_path = find_bold_ui_font()
         if not font_path:
             return
         with dpg.font_registry():
-            self.font_proj_timer = dpg.add_font(font_path, 200)
-            self.font_proj_team = dpg.add_font(font_path, 96)
-            self.font_proj_ecoute = dpg.add_font(font_path, 56)
-            self.font_proj_points = dpg.add_font(font_path, 72)
-            self.font_proj_podium_title = dpg.add_font(font_path, 64)
-            self.font_proj_podium_name = dpg.add_font(font_path, 80)
-            self.font_proj_podium_score = dpg.add_font(font_path, 48)
+            for tier, sizes in self.proj_font_sizes.items():
+                self.proj_fonts[tier] = {
+                    role: dpg.add_font(font_path, size) for role, size in sizes.items()
+                }
+        self.proj_font_tier = self.config.get("projector_font_tier", "grand")
+        if self.proj_font_tier not in self.proj_fonts:
+            self.proj_font_tier = "grand"
+        self._apply_projector_font_tier(self.proj_font_tier, persist=False)
+
+    def _apply_projector_font_tier(self, tier: str, persist: bool = True):
+        """Change la taille de texte de l'ecran public (petit/moyen/grand),
+        rebind les items deja crees, et rafraichit le podium (ses items sont
+        recrees a chaque affichage, donc reprennent la police courante)."""
+        if tier not in self.proj_fonts:
+            return
+        self.proj_font_tier = tier
+        fonts = self.proj_fonts[tier]
+        self.font_proj_timer = fonts["timer"]
+        self.font_proj_team = fonts["team"]
+        self.font_proj_ecoute = fonts["ecoute"]
+        self.font_proj_points = fonts["points"]
+        self.font_proj_podium_title = fonts["podium_title"]
+        self.font_proj_podium_name = fonts["podium_name"]
+        self.font_proj_podium_score = fonts["podium_score"]
+
+        for tag, font_id in (
+            ("txt_proj_team", self.font_proj_team),
+            ("txt_proj_ecoute", self.font_proj_ecoute),
+            ("txt_proj_points", self.font_proj_points),
+            ("txt_proj_timer", self.font_proj_timer),
+        ):
+            if dpg.does_item_exist(tag):
+                dpg.bind_item_font(tag, font_id)
+
+        if self.state == GameState.FINISHED:
+            self.update_public_podium_display()
+
+        if persist:
+            self.config["projector_font_tier"] = tier
+            self.save_pending = True
+
+    def projector_font_tier_callback(self, sender=None, app_data=None):
+        label = (app_data or "").strip().lower()
+        tier = {"petit": "petit", "moyen": "moyen", "grand": "grand"}.get(label, "grand")
+        self._apply_projector_font_tier(tier)
     
     def refresh_teams_display(self):
         if dpg.does_item_exist("teams_container"):
@@ -2057,6 +2173,7 @@ def main():
         while dpg.is_dearpygui_running():
             controller.pump_serial_queues()
             controller.tick_chrono()
+            controller.sync_projector_geometry()
             dpg.render_dearpygui_frame()
             
             current_time = time.time()
