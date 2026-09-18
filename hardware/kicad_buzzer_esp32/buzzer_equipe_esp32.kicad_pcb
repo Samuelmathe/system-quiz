@@ -2115,7 +2115,7 @@
 			(justify left)
 		)
 	)
-	(gr_text "BUZZER EQUIPE -- ESP32 (ESP-NOW, secours) -- pistes routees (Freerouting), a relire avant fabrication"
+	(gr_text "BUZZER EQUIPE - ESP32"
 		(at 8 9 0)
 		(layer "F.SilkS")
 		(uuid "b1b2d629-4244-471c-bb71-0a6e5b8fe5b7")
