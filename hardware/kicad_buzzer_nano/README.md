@@ -2,6 +2,12 @@
 
 `buzzer_equipe_nano.kicad_sch` : schéma généré à partir du BOM (`../../docs/BOM_BUZZER_EQUIPE.md`), **vérifié avec KiCad lui-même** (`kicad-cli sch erc`, format v9.0) — pas juste du texte non testé. 8 composants, 12 nets connectés (alimentation, bouton, module vibreur, nRF24 sur SPI matériel).
 
+## ⚠️ Correction : broches VCC/GND du nRF24 inversées dans une version précédente
+
+En répondant à ta question "le nrf24 c'est sur une ligne ?", j'ai vérifié le brochage du module nRF24 contre 3 sources indépendantes (components101.com, lastminuteengineers.com, doc générale nRF24L01+) et découvert que **J1 avait VCC en broche 1 et GND en broche 2 — c'est l'inverse** de la vraie numérotation (broche 1 = GND, broche 2 = VCC ; la broche 1 est d'ailleurs toujours la pastille carrée sur cette empreinte, et GND est documenté comme "identifiable par son marquage carré" sur les vrais modules). Corrigé partout : schéma, PCB, ce README. Si tu avais déjà commencé à câbler en suivant l'ancienne version, vérifie/corrige avant de mettre sous tension.
+
+Tu as aussi confirmé que ton module est un **nRF24L01+PA+LNA** (longue portée, antenne externe) — ses 8 broches sont sur un connecteur **2×4**, pas 1×8 comme le module standard. L'empreinte J1 a été changée en conséquence (voir section PCB ci-dessous).
+
 ## Comment l'ouvrir
 
 Ouvrez `buzzer_equipe_nano.kicad_sch` directement dans KiCad (File > Open). Aucun `.kicad_pro` fourni — KiCad vous proposera d'en créer un, acceptez.
@@ -24,12 +30,12 @@ L'ERC (`Inspecter > Vérification des règles électriques`) remonte 72 avertiss
 `buzzer_equipe_nano.kicad_pcb` : empreintes placées, texte de sérigraphie pour guider le soudage, **et pistes routées** — 2 couches (F.Cu/B.Cu), autoroutées avec [Freerouting](https://freerouting.app/) (outil open source dédié, pas un routage "deviné" à la main par moi) puis réimportées dans KiCad, le tout vérifié avec `kicad-cli pcb drc` réel.
 
 - Chaque composant porte son repère (A1L/A1R, J1, C1...) et une valeur/note sur son propre texte de sérigraphie.
-- Un bloc "BROCHAGE" en bas de la carte reprend toutes les correspondances de broches (ex. `J1 nRF24: 1 VCC(3V3) 2 GND 3 CE 4 CSN...`).
+- Un bloc "BROCHAGE" en bas de la carte reprend toutes les correspondances de broches (ex. `J1 nRF24 PA+LNA (2x4) -- VERIFIER sur le module: 1 GND 2 VCC(3V3) 3 CE 4 CSN...`).
 - **Le Nano est représenté par de vrais ports femelles** : deux barrettes `PinSocket_1x15` séparées (A1L = broches réelles 1-15, A1R = 16-30, espacées de 15,24mm comme sur un vrai Nano) — pas l'empreinte "Nano soudé directement" d'avant. Le Nano s'enfiche dessus, rien à souder sur le module lui-même. Numérotation vérifiée broche par broche contre la vraie empreinte `Module:Arduino_Nano` (broche 16 en bas, broche 30 en haut de la colonne droite).
-- nRF24 déjà en connecteur femelle `PinSocket_1x08`.
+- **J1 (nRF24) est maintenant un connecteur femelle 2×4** (`PinSocket_2x04`), pour le module PA+LNA que tu as confirmé. Broches 1=GND et 2=VCC réparties sur la 1ère rangée, puis CE/CSN, SCK/MOSI, MISO/IRQ sur les 3 rangées suivantes — c'est l'ordre le plus souvent publié pour ce type de module, mais **aucun standard universel n'existe pour les variantes PA+LNA** (contrairement au module simple 1×8). ⚠️ **Vérifie les repères imprimés sur ton module avant de souder** — s'ils ne correspondent pas à l'ordre ci-dessus, il suffit de recâbler les 8 fils, pas de refaire la carte.
 - Aperçu : `apercu_pcb.png` (rendu réel via `kicad-cli pcb render` — les pistes visibles sur ce rendu sont uniquement celles de la face du dessus, les pistes côté B.Cu n'apparaissent pas sur cette vue).
 
-**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 58 connexions, **0 violation de clearance, 0 élément non connecté**.
+**Pipeline utilisé** : `pcbnew.ExportSpecctraDSN()` → `freerouting.jar` (mode CLI headless, `-mp 20`) → `pcbnew.ImportSpecctraSES()` → `kicad-cli pcb drc`. 59 connexions, **0 violation de clearance, 0 élément non connecté**.
 
 **DRC final** : 9 avertissements, tous `lib_footprint_mismatch` (cosmétique, se corrige avec `Outils > Mettre à jour les empreintes depuis la bibliothèque`). Les résidus d'autorouter (`track_dangling`, tronçons en double qui ne menaient à aucune pastille) ont été identifiés et supprimés via script `pcbnew` en vérifiant d'abord la topologie réelle (ne pas casser une piste utile), puis revérifiés avec `kicad-cli pcb drc` — **0 track_dangling restant**.
 

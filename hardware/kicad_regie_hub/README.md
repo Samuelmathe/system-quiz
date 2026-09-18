@@ -2,6 +2,10 @@
 
 `regie_hub_mega_esp32.kicad_sch` : même méthode que les deux cartes buzzer (généré, **vérifié avec `kicad-cli sch erc` réel**). 11 composants, 14 nets.
 
+## ⚠️ Correction : broches VCC/GND du nRF24 inversées, module PA+LNA (2×4)
+
+Même correction que sur la carte buzzer Nano (voir `../kicad_buzzer_nano/README.md` pour le détail complet) : **J_NRF avait VCC en broche 1 et GND en broche 2 — inversé par rapport à la vraie numérotation** (broche 1 = GND, broche 2 = VCC), vérifié contre 3 sources indépendantes. Corrigé partout. Ton module confirmé étant un **nRF24L01+PA+LNA** (2×4 broches), l'empreinte J_NRF est passée de `PinSocket_1x08` à `PinSocket_2x04`.
+
 ## Ce que cette carte est (et n'est pas)
 
 **Ce n'est PAS un shield Mega complet.** Le shield DMX (`quizkicad/mega`, projet séparé, non touché) s'empile déjà directement sur la Mega. Cette carte-ci est un **petit adaptateur** qui porte l'ESP32 + le nRF24 + l'électronique entre les deux, relié à la Mega par seulement **6 fils** :
@@ -47,10 +51,11 @@ Même profil que les deux cartes buzzer, déjà expliqué en détail dans `../ki
 
 - Chaque composant (J_MEGA, U_ESP32L/R, J_NRF, U_REG, R1-R4, C1-C3) porte son repère + une note sur sa propre sérigraphie (ex. R1 "1k (diviseur TX2, série)").
 - **U_ESP32 est maintenant un vrai port femelle** : deux barrettes `PinSocket_1x15` (U_ESP32L/R, 30 broches au total, entraxe 15,24mm), pas le connecteur 12 broches abstrait d'avant. Seules 11 des 30 positions physiques sont câblées ; les 19 autres sont présentes pour que le module s'enfiche mécaniquement. Brochage : **DOIT ESP32 DevKit V1, 30 broches** — exactement le modèle que tu as confirmé avoir commandé ("esp32 devkit v1 ft232 30 pins"), un design de référence unique et bien plus standardisé que les clones 38 broches (vérifié sur https://www.espboards.dev/esp32/esp32doit-devkit-v1/). Vérifie quand même les repères GPIO imprimés sur ton module avant de souder, comme toujours avec un clone.
+- **J_NRF (nRF24) est maintenant un connecteur femelle 2×4** (`PinSocket_2x04`), pour le module PA+LNA confirmé — 1=GND, 2=VCC (corrigé), puis CE/CSN/SCK/MOSI/MISO/IRQ sur les 3 rangées suivantes. Même avertissement que sur la carte Nano : **vérifie les repères sur ton module avant de souder**, aucun standard universel pour les variantes PA+LNA.
 - Bloc "BROCHAGE" en bas de carte reprenant tout le tableau de brochage ci-dessus (broches réelles, pas les anciens numéros abstraits 1-12), plus un rappel que le shield DMX existant s'empile sur la Mega, pas sur cette carte.
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 54 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 1 via placée. DRC final : 12 avertissements, tous `lib_footprint_mismatch` (cosmétique) — **0 track_dangling** dès le premier autoroutage cette fois.
+**Résultat** : 60 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 3 vias placées. DRC final : 12 avertissements, tous `lib_footprint_mismatch` (cosmétique) — **0 track_dangling** dès le premier autoroutage.
 
 **C3 (découplage nRF24) rapproché de J_NRF** : le placement initial mettait C3 à 25mm de J_NRF (net `NRF_VCC_DEDIE`, qui relie aussi C2 et U_REG — ce n'est pas un simple lien à 2 broches). Trop loin pour un découplage propre à 2,4GHz. C3 a été repositionné à 12mm de J_NRF (`(152,20)` au lieu de `(165,20)`) et la carte entièrement re-routée : la piste J_NRF↔C3 est maintenant un tronçon direct et court, visible sur `apercu_pcb.png`.
 
