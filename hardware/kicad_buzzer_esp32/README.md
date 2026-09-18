@@ -31,6 +31,16 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 
 `ESPNOW_WIFI_CHANNEL` dans `esp32_buzzer_equipe.ino` doit rester identique à celui du hub (`esp32/esp32_bridge_server.ino`) — sans rapport avec ce schéma, mais à ne pas oublier au premier flash de la carte.
 
+## PCB : placement + repères de sérigraphie (routage à faire à la main)
+
+`buzzer_equipe_esp32.kicad_pcb` : empreintes placées + texte de sérigraphie pour guider le soudage — **pas de routage des pistes** (travail visuel laissé à faire dans KiCad).
+
+- U1 (connecteur 4 broches vers l'ESP32) porte le même brochage que ci-dessus sur sa sérigraphie.
+- Bloc "BROCHAGE" en bas de carte + rappel du canal ESPNOW_WIFI_CHANNEL.
+- Aperçu : `apercu_pcb.png`.
+
+**DRC** : 6 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano). 11 éléments non connectés = normal (ratsnest sans routage).
+
 ## Prochaine étape
 
-Attribution des empreintes puis routage du PCB dans l'interface KiCad — travail visuel, pas généré en texte.
+Routage du PCB dans l'interface KiCad — travail visuel, pas généré en texte.

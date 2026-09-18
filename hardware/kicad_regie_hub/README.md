@@ -41,6 +41,16 @@ Même profil que les deux cartes buzzer, déjà expliqué en détail dans `../ki
 | `no_connect_dangling` | 2 | Marqueurs "pas de connexion" légèrement décalés — à recaler d'un clic |
 | `power_pin_not_driven` | 1 | Normal sur un réseau GND (également présent dans `quizkicad/mega`) |
 
+## PCB : placement + repères de sérigraphie (routage à faire à la main)
+
+`regie_hub_mega_esp32.kicad_pcb` : empreintes placées + texte de sérigraphie pour guider le soudage — **pas de routage des pistes** (travail visuel laissé à faire dans KiCad).
+
+- Chaque composant (J_MEGA, U_ESP32, J_NRF, U_REG, R1-R4, C1-C3) porte son repère + une note sur sa propre sérigraphie (ex. R1 "1k (diviseur TX2, série)").
+- Bloc "BROCHAGE" en bas de carte reprenant tout le tableau de brochage ci-dessus, plus un rappel que le shield DMX existant s'empile sur la Mega, pas sur cette carte.
+- Aperçu : `apercu_pcb.png`.
+
+**DRC** : 11 avertissements, tous `lib_footprint_mismatch` (cosmétique, même catégorie que sur les deux cartes buzzer). 27 éléments non connectés = normal (ratsnest sans routage, 14 nets).
+
 ## Prochaine étape
 
-Attribution des empreintes puis routage — en particulier bien respecter les recommandations `cl.md` (VCC nRF24 en 3,3V uniquement jamais 5V, condensateur de découplage proche du module, GND commun).
+Routage — en particulier bien respecter les recommandations `cl.md` (VCC nRF24 en 3,3V uniquement jamais 5V, condensateur de découplage proche du module, GND commun).
