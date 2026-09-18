@@ -29,6 +29,7 @@ Câblage simplifié (identique sur les deux cartes) :
 | Module charge + protection | TP4056 + DW01A/FS8205A, **variante USB-C** | Charge + coupure basse tension automatique (~2,4-3,0V) + protection surcharge/court-circuit |
 | Boost 5V | Module boost LiPo→5V (ex. base MT3608) — souvent intégré au module TP4056 ci-dessus en version combinée | Tension stable 5V quelle que soit la charge de la batterie |
 | Interrupteur | Glissière ou bouton-poussoir à verrouillage, sur la ligne 5V après le boost | Éteindre complètement entre deux events — sans lui l'autonomie 4-6h ne veut plus rien dire si le boîtier reste allumé par oubli |
+| Indicateur niveau batterie | Module "1S lithium battery capacity indicator", 4 LED (25/50/75/100%) | Branché directement en parallèle sur la batterie (2 fils B+/B-, ~5mA, toujours actif, pas de bouton) — repère `BATLED` sur le PCB |
 
 ---
 
