@@ -4,7 +4,7 @@
 
 ## ⚠️ Correction : broches VCC/GND du nRF24 inversées, module PA+LNA (2×4)
 
-Même correction que sur la carte buzzer Nano (voir `../kicad_buzzer_nano/README.md` pour le détail complet) : **J_NRF avait VCC en broche 1 et GND en broche 2 — inversé par rapport à la vraie numérotation** (broche 1 = GND, broche 2 = VCC), vérifié contre 3 sources indépendantes. Corrigé partout. Ton module confirmé étant un **nRF24L01+PA+LNA** (2×4 broches), l'empreinte J_NRF est passée de `PinSocket_1x08` à `PinSocket_2x04`.
+Même correction que sur la carte buzzer Nano (voir `../kicad_buzzer_nano/README.md` pour le détail complet) : **J_NRF avait VCC en broche 1 et GND en broche 2 — inversé par rapport à la vraie numérotation** (broche 1 = GND, broche 2 = VCC), vérifié contre 3 sources indépendantes. Corrigé partout. Ton module confirmé étant un **nRF24L01+PA+LNA** (2×4 broches), l'empreinte J_NRF est passée de `PinSocket_1x08` à `PinHeader_2x04` (connecteur **mâle** — le module a lui-même des ports femelles, donc c'est la carte qui doit porter les broches mâles).
 
 ## Ce que cette carte est (et n'est pas)
 
@@ -55,10 +55,10 @@ Même profil que les deux cartes buzzer, déjà expliqué en détail dans `../ki
 - **C3 (découplage nRF24) encore rapproché de J_NRF** (~12mm, contre 25mm dans la toute première version).
 - **Zone sans cuivre sous le nRF24** : même mécanisme keepout que la carte Nano (voir son README pour le détail de la vérification), placé en presqu'île contre le bord droit pour ne bloquer aucun chemin de routage.
 - **U_ESP32 est un vrai port femelle** : deux barrettes `PinSocket_1x15` (U_ESP32L/R, 30 broches, entraxe 15,24mm). Seules 11 des 30 positions physiques sont câblées ; les 19 autres sont présentes pour que le module s'enfiche mécaniquement. Brochage : **DOIT ESP32 DevKit V1, 30 broches** — exactement le modèle confirmé commandé, design de référence unique et bien plus standardisé que les clones 38 broches (vérifié sur https://www.espboards.dev/esp32/esp32doit-devkit-v1/).
-- **J_NRF (nRF24) est un connecteur femelle 2×4** (`PinSocket_2x04`), pour le module PA+LNA confirmé — 1=GND, 2=VCC, puis CE/CSN/SCK/MOSI/MISO/IRQ. ⚠️ **Vérifie les repères sur ton module avant de souder**, aucun standard universel pour les variantes PA+LNA.
+- **J_NRF (nRF24) est un connecteur MÂLE 2×4** (`PinHeader_2x04`) — le module a des ports femelles dessus, donc la carte porte les broches mâles. 1=GND, 2=VCC, puis CE/CSN/SCK/MOSI/MISO/IRQ. ⚠️ **Vérifie les repères sur ton module avant de souder**, aucun standard universel pour les variantes PA+LNA.
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 55 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 2 vias placées, keepout respecté (0 piste dedans, vérifié par script). DRC final : 12 avertissements, tous `lib_footprint_mismatch` (cosmétique) — **0 track_dangling** dès le premier autoroutage.
+**Résultat** : 66 connexions (14 nets), **0 violation de clearance, 0 élément non connecté**, 2 vias placées, keepout respecté (0 piste dedans, vérifié par script). DRC final : 12 avertissements, tous `lib_footprint_mismatch` (cosmétique). 2 `track_dangling` initiaux (résidus d'autorouter) identifiés et supprimés après vérification de la topologie réelle — **0 track_dangling restant**.
 
 **C3 (découplage nRF24) rapproché de J_NRF** : le placement initial mettait C3 à 25mm de J_NRF (net `NRF_VCC_DEDIE`, qui relie aussi C2 et U_REG — ce n'est pas un simple lien à 2 broches). Trop loin pour un découplage propre à 2,4GHz. C3 a été repositionné à 12mm de J_NRF (`(152,20)` au lieu de `(165,20)`) et la carte entièrement re-routée : la piste J_NRF↔C3 est maintenant un tronçon direct et court, visible sur `apercu_pcb.png`.
 
