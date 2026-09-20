@@ -1,0 +1,11 @@
+Designator,Comment,Footprint
+A1L,Nano colonne gauche (broches 1-15),Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical
+A1R,Nano colonne droite (broches 16-30),Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical
+BATLED,Indicateur niveau batterie (4 LED) - CMS - 1=B+ 2=B-,Connector_PinSocket_2.54mm:PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left
+BT1,Batterie LiPo 1S 500-600mAh - connecteur JST-PH (1=+ 2=-),Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical
+C1,"10-100uF decouplage nRF24 (obligatoire, au plus pres) - CMS",Capacitor_SMD:C_0805_2012Metric
+J1,"nRF24L01+PA+LNA (broches MALES, le module a des ports femelles) - VERIFIER le brochage sur le module recu",Connector_PinHeader_2.54mm:PinHeader_2x04_P2.54mm_Vertical
+J2,Module charge TP4056+protect+boost USB-C - CMS,Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical_SMD_Pin1Left
+J3,Module vibreur IN/VCC/GND - CMS,Connector_PinSocket_2.54mm:PinSocket_1x03_P2.54mm_Vertical_SMD_Pin1Left
+SW1,Bouton BUZZ (fils volants) - CMS,Connector_PinSocket_2.54mm:PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left
+SW2,Interrupteur marche/arret (fils volants) - CMS,Connector_PinSocket_2.54mm:PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left

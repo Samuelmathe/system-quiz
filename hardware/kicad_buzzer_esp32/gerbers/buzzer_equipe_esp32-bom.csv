@@ -1,0 +1,9 @@
+Designator,Comment,Footprint
+BATLED,Indicateur niveau batterie (4 LED) - CMS - 1=B+ 2=B-,Connector_PinSocket_2.54mm:PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left
+BT1,Batterie LiPo 1S 1000-1200mAh - connecteur JST-PH (1=+ 2=-),Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical
+J2,Module charge TP4056+protect+boost USB-C - CMS,Connector_PinSocket_2.54mm:PinSocket_1x04_P2.54mm_Vertical_SMD_Pin1Left
+J3,Module vibreur IN/VCC/GND - CMS,Connector_PinSocket_2.54mm:PinSocket_1x03_P2.54mm_Vertical_SMD_Pin1Left
+SW1,Bouton BUZZ (fils volants) - CMS,Connector_PinSocket_2.54mm:PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left
+SW2,Interrupteur marche/arret (fils volants) - CMS,Connector_PinSocket_2.54mm:PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left
+U1L,ESP32 colonne gauche (broches 1-19) - VERIFIER sur le module recu,Connector_PinSocket_2.54mm:PinSocket_1x19_P2.54mm_Vertical
+U1R,ESP32 colonne droite (broches 20-38) - VERIFIER sur le module recu,Connector_PinSocket_2.54mm:PinSocket_1x19_P2.54mm_Vertical

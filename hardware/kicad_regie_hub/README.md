@@ -14,10 +14,12 @@ Même correction que sur la carte buzzer Nano (voir `../kicad_buzzer_nano/README
 |---|---|---|
 | 1 | TX2 (5V) | Mega pin 16 |
 | 2 | RX2 | Mega pin 17 |
-| 3 | TX3 (5V) | Mega pin 14 |
-| 4 | RX3 | Mega pin 15 |
+| 3 | TX1 (5V) | Mega pin 18 |
+| 4 | RX1 | Mega pin 19 |
 | 5 | 5V | Sortie régulateur onboard de la Mega |
 | 6 | GND | Masse commune |
+
+⚠️ **[FIX] Broches 3/4 déplacées de Mega Serial3 (pins 14/15) vers Mega Serial1 (pins 18/19)** : en vérifiant le câblage réel avec Samuel, Serial3 était déjà utilisé par le shield DMX (mal aiguillé côté firmware, corrigé dans `megaf.ino`) et doit rester dédié au câble TTL PC (scripts Python) comme lien de secours simultané au WiFi. Serial1 était complètement libre sur la Mega — voir `megaf.ino` et `esp32/esp32_bridge_server.ino` pour le détail complet.
 
 **Alimentation** : pas de batterie sur cette carte — confirmé par toi : "on branche le mega [secteur] mais le reste des modules sera alimenté [par lui]". Le 5V vient du régulateur déjà présent sur la Mega.
 
@@ -26,7 +28,7 @@ Même correction que sur la carte buzzer Nano (voir `../kicad_buzzer_nano/README
 Tu as mentionné un "convertisseur logique" entre les RX/TX de la Mega et de l'ESP32. J'ai utilisé le **pont diviseur 1kΩ/2kΩ** à la place d'un module dédié — ce n'est pas un raccourci, c'est la solution **déjà documentée et déjà validée sur ce projet** (`cl.md` section 3.3, schéma dans `docs/APK_HYBRIDE_GUIDE.md`) pour exactement ces deux liaisons série. Réutiliser une solution qui marche déjà coûte moins cher et évite d'introduire une dépendance à un nouveau module non testé sur ce projet.
 
 - **R1/R2** : diviseur sur Mega TX2 (5V) → ESP32 RX1 (3,3V) — lien Jeu.
-- **R3/R4** : diviseur sur Mega TX3 (5V) → ESP32 RX2 (3,3V) — lien Config EEPROM.
+- **R3/R4** : diviseur sur Mega TX1 (5V) → ESP32 RX2 (3,3V) — lien Config EEPROM (déplacé depuis TX3, voir note ci-dessus).
 - **Pas de diviseur dans l'autre sens** (ESP32 TX → Mega RX) : déjà documenté que le 3,3V est lu comme HIGH par les entrées 5V de la Mega, connexion directe.
 
 ## Pourquoi un régulateur dédié au nRF24 (pas le 3V3 de l'ESP32)

@@ -1,9 +1,9 @@
 Ref,Val,Package,PosX,PosY,Rot,Side
-"BATLED","Indicateur niveau batterie (4 LED) - CMS - 1=B+ 2=B-","PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left",58.000000,-95.000000,0.000000,top
-"BT1","Batterie LiPo 1S 1000-1200mAh - connecteur JST-PH (1=+ 2=-)","JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical",58.000000,-75.000000,0.000000,top
-"J2","Module charge TP4056+protect+boost USB-C - CMS","PinSocket_1x04_P2.54mm_Vertical_SMD_Pin1Left",38.000000,-75.000000,0.000000,top
-"J3","Module vibreur IN/VCC/GND - CMS","PinSocket_1x03_P2.54mm_Vertical_SMD_Pin1Left",38.000000,-95.000000,0.000000,top
-"SW1","Bouton BUZZ (fils volants) - CMS","PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left",10.000000,-75.000000,0.000000,top
-"SW2","Interrupteur marche/arret (fils volants) - CMS","PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left",10.000000,-95.000000,0.000000,top
-"U1L","ESP32 colonne gauche (broches 1-19) - VERIFIER sur le module recu","PinSocket_1x19_P2.54mm_Vertical",10.000000,-16.000000,0.000000,top
-"U1R","ESP32 colonne droite (broches 20-38) - VERIFIER sur le module recu","PinSocket_1x19_P2.54mm_Vertical",32.860000,-16.000000,0.000000,top
+"BATLED","Indicateur niveau batterie (4 LED) - CMS - 1=B+ 2=B-","PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left",23.500000,-43.000000,0.000000,top
+"BT1","Batterie LiPo 1S 1000-1200mAh - connecteur JST-PH (1=+ 2=-)","JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical",56.830000,-42.450000,0.000000,top
+"J2","Module charge TP4056+protect+boost USB-C - CMS","PinSocket_1x04_P2.54mm_Vertical_SMD_Pin1Left",46.150000,-43.000000,90.000000,top
+"J3","Module vibreur IN/VCC/GND - CMS","PinSocket_1x03_P2.54mm_Vertical_SMD_Pin1Left",33.530000,-43.000000,90.000000,top
+"SW1","Bouton BUZZ (fils volants) - CMS","PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left",6.100000,-43.000000,0.000000,top
+"SW2","Interrupteur marche/arret (fils volants) - CMS","PinSocket_1x02_P2.54mm_Vertical_SMD_Pin1Left",14.800000,-43.000000,0.000000,top
+"U1L","ESP32 colonne gauche (broches 1-19) - VERIFIER sur le module recu","PinSocket_1x19_P2.54mm_Vertical",8.000000,-12.000000,90.000000,top
+"U1R","ESP32 colonne droite (broches 20-38) - VERIFIER sur le module recu","PinSocket_1x19_P2.54mm_Vertical",8.000000,-34.860000,90.000000,top

@@ -1160,7 +1160,7 @@
 				)
 			)
 		)
-		(property "Value" "Vers Mega: TX2 RX2 TX3 RX3 5V GND"
+		(property "Value" "Vers Mega: TX2(16) RX2(17) TX1(18) RX1(19) 5V GND"
 			(at 0 15.47 0)
 			(layer "F.Fab")
 			(uuid "aa73b224-f345-4997-8548-56a86bc306bb")

@@ -1,0 +1,13 @@
+Designator,Comment,Footprint
+C1,~10uF decouplage entree regulateur - CMS,Capacitor_SMD:C_0805_2012Metric
+C2,~10uF decouplage sortie regulateur - CMS,Capacitor_SMD:C_0805_2012Metric
+C3,"10-100uF decouplage nRF24 (obligatoire, au plus pres) - CMS",Capacitor_SMD:C_0805_2012Metric
+J_MEGA,Vers Mega: TX2 RX2 TX3 RX3 5V GND,Connector_PinSocket_2.54mm:PinSocket_1x06_P2.54mm_Vertical
+J_NRF,"nRF24L01+PA+LNA (broches MALES, le module a des ports femelles) - VERIFIER le brochage sur le module recu",Connector_PinHeader_2.54mm:PinHeader_2x04_P2.54mm_Vertical
+R1,"1k (diviseur TX2, serie) - CMS",Resistor_SMD:R_0805_2012Metric
+R2,"2k (diviseur TX2, vers GND) - CMS",Resistor_SMD:R_0805_2012Metric
+R3,"1k (diviseur TX3, serie) - CMS",Resistor_SMD:R_0805_2012Metric
+R4,"2k (diviseur TX3, vers GND) - CMS",Resistor_SMD:R_0805_2012Metric
+U_ESP32L,ESP32 DevKit V1 colonne gauche (broches 1-15),Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical
+U_ESP32R,ESP32 DevKit V1 colonne droite (broches 16-30),Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical
+U_REG,Regulateur 3.3V dedie (ex AMS1117-3.3),Connector_PinSocket_2.54mm:PinSocket_1x03_P2.54mm_Vertical

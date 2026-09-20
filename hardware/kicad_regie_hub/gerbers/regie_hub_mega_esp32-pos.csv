@@ -2,7 +2,7 @@ Ref,Val,Package,PosX,PosY,Rot,Side
 "C1","~10uF decouplage entree regulateur - CMS","C_0805_2012Metric",30.000000,-65.000000,0.000000,top
 "C2","~10uF decouplage sortie regulateur - CMS","C_0805_2012Metric",46.000000,-65.000000,0.000000,top
 "C3","10-100uF decouplage nRF24 (obligatoire, au plus pres) - CMS","C_0805_2012Metric",82.000000,-19.000000,0.000000,top
-"J_MEGA","Vers Mega: TX2 RX2 TX3 RX3 5V GND","PinSocket_1x06_P2.54mm_Vertical",10.000000,-15.000000,0.000000,top
+"J_MEGA","Vers Mega: TX2(16) RX2(17) TX1(18) RX1(19) 5V GND","PinSocket_1x06_P2.54mm_Vertical",10.000000,-15.000000,0.000000,top
 "J_NRF","nRF24L01+PA+LNA (broches MALES, le module a des ports femelles) - VERIFIER le brochage sur le module recu","PinHeader_2x04_P2.54mm_Vertical",96.000000,-15.000000,0.000000,top
 "R1","1k (diviseur TX2, serie) - CMS","R_0805_2012Metric",30.000000,-15.000000,0.000000,top
 "R2","2k (diviseur TX2, vers GND) - CMS","R_0805_2012Metric",30.000000,-27.000000,0.000000,top

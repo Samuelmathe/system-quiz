@@ -38,6 +38,7 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 **Changements suite à ta relecture** :
 - **Le texte-guide en sérigraphie a été retiré** — repères de composants standards uniquement (U1L, U1R, SW1...).
 - **Carte bien plus compacte** : ~68×101mm au lieu de 130×145mm.
+- **v3 : réduite encore à 65×50mm exactement**, pour correspondre au boîtier déjà conçu. U1L/U1R (les deux barrettes du module ESP32, 49mm de long chacune) ont dû être **pivotées à 90°** pour tenir dans cette largeur — leur entraxe réel (22,86mm) est inchangé, seule l'orientation sur la carte change, ça ne modifie rien au câblage ni au module qui s'enfiche dessus. Les 6 petits connecteurs (SW1, SW2, BATLED, J3, J2, BT1) sont serrés sur une seule rangée en bas de la carte, J2/J3 également pivotés à 90° pour gagner de la place en hauteur.
 - Pas de keepout sur cette carte : pas de nRF24 ici, l'ESP-NOW utilise l'antenne intégrée à la puce ESP32 elle-même.
 - **SW1, SW2, J2, J3 (connecteurs "fils volants") sont maintenant en CMS** (empreintes SMD), par choix explicite pour un assemblage machine (PCBA) chez le fabricant. Même numérotation de broche qu'avant. **Restent traversants** : U1L/U1R (le module ESP32 s'enfiche dessus) et **BT1**.
 - **BT1 (batterie) est un vrai connecteur JST-PH** (`JST_PH_B2B-PH-K`, mâle, traversant) — même raisonnement que la carte Nano (voir son README) : la batterie a déjà une prise femelle sertie sur ses fils, et ce connecteur encaisse des cycles de branchement/débranchement qu'un pad CMS ne supporterait pas. Broche 1 = + (rouge), broche 2 = − (noir) — **vérifie la polarité sur ta batterie reçue**.
@@ -49,7 +50,7 @@ Le `label_dangling` et plusieurs `pin_not_connected` concernent le réseau `BAT_
 
 - Aperçu : `apercu_pcb.png`.
 
-**Résultat** : 42 connexions, **0 violation de clearance, 0 élément non connecté**. DRC final : 3 avertissements, tous `lib_footprint_mismatch` (cosmétique, comme sur la carte Nano). Quelques `track_dangling` initiaux (résidus d'autorouter) identifiés et supprimés après vérification de la topologie réelle — **0 track_dangling restant**.
+**Résultat (v3, 65×50mm)** : **0 violation de clearance, 0 élément non connecté**. DRC final : 19 avertissements, tous cosmétiques — `lib_footprint_mismatch` (5, comme d'habitude), `silk_overlap` (1, texte de référence U1R qui chevauche légèrement son propre contour après la rotation à 90°), et `silk_over_copper` (13, des pistes routées passent juste sous la sérigraphie de J2/J3 — carte très dense, aucun impact électrique, juste un risque que l'encre sérigraphie ne s'imprime pas parfaitement à ces endroits précis). Un `track_dangling` initial (résidu d'autorouter, un stub B.Cu redondant en doublon d'un chemin déjà assuré côté F.Cu) identifié et supprimé après vérification de la topologie réelle — **0 track_dangling restant**.
 
 ## Prochaine étape
 
