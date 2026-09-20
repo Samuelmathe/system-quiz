@@ -525,6 +525,14 @@
   if (inputSonsDossier) inputSonsDossier.addEventListener("change", onSonsFilesChange);
   if (inputSonsFichiers) inputSonsFichiers.addEventListener("change", onSonsFilesChange);
 
+  // Sons restaures depuis IndexedDB (persistes entre deux ouvertures de page)
+  hub.sons.pret.then((cles) => {
+    if (cles.length && txtSonsStatus && !txtSonsStatus.textContent) {
+      txtSonsStatus.textContent = `✔ ${cles.length} son(s) restauré(s) depuis cet appareil`;
+      txtSonsStatus.style.color = "var(--color-success)";
+    }
+  });
+
   // Initialisation et souscription aux changements
   hub.subscribe(render);
 

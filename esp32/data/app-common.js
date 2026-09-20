@@ -44,13 +44,82 @@
 
   // --- Gestionnaire de sons personnalises (charges par le client depuis son
   // appareil, meme convention de noms que interface/sounds/ cote logiciel PC :
-  // buzz.mp3, victoire.mp3, echec.mp3, equipe_N.mp3). Remplace les anciens
-  // bips generes en synthese (Web Audio) -- ici ce sont de vrais fichiers,
-  // mais gardes en memoire seulement (URL.createObjectURL), pas persistes :
-  // a recharger a chaque ouverture de page, comme l'import de questions Excel. ---
+  // buzz.mp3, victoire.mp3, echec.mp3, equipe_N.mp3). Les fichiers sont
+  // conserves dans IndexedDB (sur l'appareil lui-meme, pas sur l'ESP32 dont
+  // la flash est trop petite) et restaures a chaque ouverture de page. Les
+  // elements Audio sont precharges une fois : jouer un son ne redecode plus
+  // le fichier a chaque buzz. ---
+  const SONS_DB_NOM = "dmx_quiz_sons";
+  const SONS_DB_STORE = "sons";
+
   class SoundManager {
     constructor() {
       this.urls = { buzz: null, victoire: null, echec: null, equipes: {} };
+      this.audios = {};
+      // Promesse resolue avec la liste des slots restaures (vide si IndexedDB
+      // indisponible : le mode "en memoire seulement" reste alors valable).
+      this.pret = this._restaurer();
+    }
+
+    _ouvrirDB() {
+      return new Promise((resolve, reject) => {
+        if (!("indexedDB" in window)) return reject(new Error("IndexedDB indisponible"));
+        const req = indexedDB.open(SONS_DB_NOM, 1);
+        req.onupgradeneeded = () => req.result.createObjectStore(SONS_DB_STORE);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    _sauver(cle, blob) {
+      return this._ouvrirDB().then((db) => new Promise((resolve, reject) => {
+        const tx = db.transaction(SONS_DB_STORE, "readwrite");
+        tx.objectStore(SONS_DB_STORE).put(blob, cle);
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => { db.close(); reject(tx.error); };
+      })).catch(() => {});
+    }
+
+    _restaurer() {
+      return this._ouvrirDB().then((db) => new Promise((resolve, reject) => {
+        const store = db.transaction(SONS_DB_STORE, "readonly").objectStore(SONS_DB_STORE);
+        const reqCles = store.getAllKeys();
+        const reqVals = store.getAll();
+        reqVals.onsuccess = () => {
+          const cles = reqCles.result;
+          cles.forEach((cle, i) => this._appliquer(cle, reqVals.result[i]));
+          db.close();
+          resolve(cles);
+        };
+        reqVals.onerror = () => { db.close(); reject(reqVals.error); };
+      })).catch(() => []);
+    }
+
+    // Associe un blob a son slot ("buzz", "victoire", "echec", "equipe_N") et
+    // precharge l'element Audio correspondant.
+    _appliquer(cle, blob) {
+      const url = URL.createObjectURL(blob);
+      const matchEquipe = String(cle).match(/^equipe_(\d+)$/);
+      let ancien = null;
+      if (cle === "buzz" || cle === "victoire" || cle === "echec") {
+        ancien = this.urls[cle];
+        this.urls[cle] = url;
+      } else if (matchEquipe) {
+        const idx = parseInt(matchEquipe[1], 10) - 1;
+        ancien = this.urls.equipes[idx];
+        this.urls.equipes[idx] = url;
+      } else {
+        URL.revokeObjectURL(url);
+        return;
+      }
+      if (ancien) {
+        URL.revokeObjectURL(ancien);
+        delete this.audios[ancien];
+      }
+      const audio = new Audio(url);
+      audio.preload = "auto";
+      audio.load();
+      this.audios[url] = audio;
     }
 
     // Associe chaque fichier choisi a un "slot" via son nom (insensible a la
@@ -59,23 +128,26 @@
       const resultat = { reconnus: [], ignores: [] };
       Array.from(fileList).forEach((file) => {
         const nom = file.name.toLowerCase().replace(/\.[^.]+$/, "");
-        const url = URL.createObjectURL(file);
         const matchEquipe = nom.match(/^equipe[_-]?(\d+)$/);
+        let cle = null;
         if (nom === "buzz") {
-          this.urls.buzz = url;
+          cle = "buzz";
           resultat.reconnus.push(`Buzz générique ← ${file.name}`);
         } else if (nom === "victoire") {
-          this.urls.victoire = url;
+          cle = "victoire";
           resultat.reconnus.push(`Victoire ← ${file.name}`);
         } else if (nom === "echec") {
-          this.urls.echec = url;
+          cle = "echec";
           resultat.reconnus.push(`Échec ← ${file.name}`);
         } else if (matchEquipe) {
-          const teamIdx = parseInt(matchEquipe[1], 10) - 1;
-          this.urls.equipes[teamIdx] = url;
+          cle = `equipe_${parseInt(matchEquipe[1], 10)}`;
           resultat.reconnus.push(`Équipe ${matchEquipe[1]} ← ${file.name}`);
         } else {
           resultat.ignores.push(file.name);
+        }
+        if (cle) {
+          this._appliquer(cle, file);
+          this._sauver(cle, file);
         }
       });
       return resultat;
@@ -90,7 +162,9 @@
       }
       if (!url) return;
       try {
-        new Audio(url).play().catch(() => {});
+        const audio = this.audios[url] || new Audio(url);
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
       } catch (e) {}
     }
   }
