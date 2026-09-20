@@ -28,6 +28,30 @@ try:
 except Exception:
     PYGAME_OK = False
 
+def parse_cfg_couleurs(lignes):
+    """Lignes CFG:... renvoyees par la Mega (GET_CONFIG) -> (nb_equipes,
+    {equipe_index: [[r, g, b] par projecteur]}). Leve ValueError si incomplet.
+    Seules les couleurs (et le nombre d'equipes) servent ici, en lecture seule."""
+    nb_eq = 0
+    cols: Dict[int, Dict[int, List[int]]] = {}
+    for ligne in lignes:
+        p = ligne.strip().split(":")
+        if len(p) < 3 or p[0] != "CFG":
+            continue
+        try:
+            n = [int(v) for v in p[2:]]
+        except ValueError:
+            continue
+        if p[1] == "NB_EQ":
+            nb_eq = n[0]
+        elif p[1] == "COL" and len(n) >= 5:
+            cols.setdefault(n[0] - 1, {})[n[1]] = [n[2], n[3], n[4]]
+    if nb_eq < 1 or not cols:
+        raise ValueError("configuration recue incomplete ou vide")
+    couleurs = {e: [c[g] for g in sorted(c)] for e, c in cols.items() if e < nb_eq}
+    return nb_eq, couleurs
+
+
 def get_base_path():
     """Retourne le chemin du dossier où se trouve l'exe ou le script.
     Utilise sys.executable pour accéder aux fichiers EXTERNES (sounds/)
@@ -126,9 +150,13 @@ class QuizController:
         self.teams: Dict[int, dict] = {}
         self.config: Dict[str, Any] = {}
         # Couleurs DMX réelles par équipe/projecteur, importées en lecture seule depuis
-        # config_quiz_pro.json (config_final_30.py) — jamais écrites, jamais envoyées au
-        # Mega : uniquement pour affichage de référence côté animateur.
+        # config_quiz_pro.json (config_final_30.py) ou lues depuis la Mega (bouton
+        # "Lire Mega") — jamais écrites, jamais envoyées au Mega : uniquement pour
+        # affichage de référence côté animateur.
         self.dmx_projector_colors: Dict[int, List[List[int]]] = {}
+        # Lecture de la config depuis la Mega (bouton "Lire Mega", commande GET_CONFIG)
+        self._cfg_lignes: Optional[List[str]] = None
+        self._cfg_deadline = 0.0
         
         # Communication serie (lignes / evenements traites sur le thread GUI — Dear PyGui n'est pas thread-safe)
         self.serial_connection: Optional[serial.Serial] = None
@@ -547,6 +575,46 @@ class QuizController:
                 seen.add(hexval)
                 out.append(hexval)
         return out
+
+    def lire_config_mega_callback(self, sender=None, app_data=None):
+        """Demande a la Mega sa config (GET_CONFIG) et affiche ses vraies couleurs
+        DMX par equipe, comme l'import du fichier JSON mais sans fichier. Lecture
+        seule : n'ecrit rien sur la Mega."""
+        conn = self.serial_connection
+        if (not conn or not conn.is_open
+                or getattr(self, "serial_device_kind", "mega") != "mega"):
+            self.add_log("Lecture Mega : connectez d'abord la Mega (cable TTL).", color=[255, 150, 0])
+            return
+        self._cfg_lignes = []
+        self._cfg_deadline = time.time() + 15
+        self.add_log("Lecture de la configuration depuis la Mega...", color=[255, 165, 0])
+        self._serial_write_line(b"GET_CONFIG\n")
+
+    def _recevoir_ligne_cfg(self, line: str) -> None:
+        if self._cfg_lignes is None:
+            return  # dump non demande par ce logiciel (ex. demande par l'appli web) : ignore
+        if line == "CFG:BEGIN":
+            self._cfg_lignes = [line]
+            return
+        self._cfg_lignes.append(line)
+        if line != "CFG:END":
+            return
+        lignes, self._cfg_lignes = self._cfg_lignes, None
+        try:
+            nb_eq, couleurs = parse_cfg_couleurs(lignes)
+        except ValueError as e:
+            self.add_log(f"Lecture Mega : {e}", color=[255, 100, 100])
+            return
+        self.dmx_projector_colors = couleurs
+        self.refresh_teams_display()
+        nb_proj = max((len(c) for c in couleurs.values()), default=0)
+        self.add_log(
+            f"Couleurs DMX lues depuis la Mega : {nb_eq} equipe(s), {nb_proj} projecteur(s) "
+            f"(lecture seule).", color=[140, 220, 180])
+        if nb_eq != len(self.teams):
+            self.add_log(
+                f"La Mega a {nb_eq} equipe(s), le logiciel en a {len(self.teams)} : "
+                f"aligner avec AJOUTER / SUPPRIMER.", color=[255, 160, 80])
 
     def import_dmx_colors_callback(self, sender, app_data):
         """Importe config_quiz_pro.json (produit par config_final_30.py) pour afficher,
@@ -1370,6 +1438,19 @@ class QuizController:
         if not line:
             return
 
+        if self._cfg_lignes is not None and time.time() > self._cfg_deadline:
+            self._cfg_lignes = None
+            self.add_log("Lecture Mega : aucune reponse complete (firmware sans GET_CONFIG ?).",
+                         color=[255, 100, 100])
+        if line.startswith("CFG:"):
+            self._recevoir_ligne_cfg(line)
+            return
+        if "GET_CONFIG_BUSY" in line:
+            self._cfg_lignes = None
+            self.add_log("Mega en manche (buzz en cours) : valider/refuser puis relire.",
+                         color=[255, 150, 0])
+            return
+
         if self._serial_log_rx and not line.startswith("CONF:"):
             if (
                 line.startswith("BUZZ:")
@@ -1549,6 +1630,12 @@ class QuizController:
                     label="Couleurs DMX...",
                     callback=lambda s, a: dpg.show_item("dmx_color_file_dialog"),
                     width=120,
+                )
+                dpg.add_spacer(width=4)
+                dpg.add_button(
+                    label="Lire Mega",
+                    callback=self.lire_config_mega_callback,
+                    width=90,
                 )
 
             dpg.add_spacer(height=5)

@@ -201,5 +201,6 @@ La **Mega** est la référence commune : le logiciel Python (`config_final_30.py
 - Sont synchronisés : projecteurs (adresse, canaux, décalages, strobe, mode), nombre d'équipes, couleur de chaque équipe par projecteur, durée de strobe par équipe.
 - **Ne sont pas dans la Mega** (donc propres à chaque outil) : noms d'équipes, scores, questions, sons. La lecture les conserve dans l'appli.
 - La lecture est **refusée pendant une manche** (après un buzz, tant que rien n'est validé/refusé) pour ne jamais gêner le jeu ; elle est non bloquante et dure moins d'une seconde pour une config normale.
+- Le **logiciel score** (`QuizBoardV6`, `interface_30eq.py`) a aussi un bouton **« Lire Mega »** : il lit les couleurs DMX de chaque équipe directement dans la Mega (câble TTL branché), en **lecture seule**, à la place de l'import du fichier JSON « Couleurs DMX... ». Il signale si le nombre d'équipes de la Mega diffère de celui du logiciel.
 - Le logiciel Python sauvegarde l'ancienne config PC en `config_quiz_pro.json.bak` avant d'être remplacée.
 - Nécessite la Mega **et** l'ESP32 reflashés avec cette version (nouveau `megaf.ino` + `esp32_bridge_server.ino`) et l'upload LittleFS du dossier `data/`.
