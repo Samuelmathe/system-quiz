@@ -126,8 +126,10 @@ L'installeur se trouve dans `hybrid-app-animateur/electron/dist/` (`.exe` sous W
 | **Masse** | **GND** | **GND** | **Liaison directe obligatoire** |
 | **Jeu (Buzz / Commandes)** | **GPIO 25 (TX1)** | **Pin 17 (RX2)** | Direct (Le Mega 5V accepte le 3.3V HIGH) |
 | **Jeu (Retours Mega)** | **GPIO 26 (RX1)** | **Pin 16 (TX2)** | **Pont diviseur 1kΩ / 2kΩ** (5V ➔ 3.3V) |
-| **Config EEPROM** | **GPIO 17 (TX2)** | **Pin 14 (RX3)** | Direct |
-| **Config (Retours Mega)** | **GPIO 16 (RX2)** | **Pin 15 (TX3)** | **Pont diviseur 1kΩ / 2kΩ** (5V ➔ 3.3V) |
+| **Config EEPROM** | **GPIO 17 (TX2)** | **Pin 19 (RX1)** | Direct |
+| **Config (Retours Mega)** | **GPIO 16 (RX2)** | **Pin 18 (TX1)** | **Pont diviseur 1kΩ / 2kΩ** (5V ➔ 3.3V) |
+
+⚠️ **[FIX] Lien Config déplacé de Mega Serial3 (pins 14/15) vers Mega Serial1 (pins 18/19)** — Serial3 était déjà utilisé par le shield DMX (mal aiguillé côté firmware avant correction) et reste maintenant dédié au câble TTL PC (scripts Python) comme secours simultané au WiFi. Serial1 était libre. Voir `megaf.ino` et `esp32/esp32_bridge_server.ino`. (Au passage, l'ancienne version de ce tableau avait aussi RX3/TX3 inversés — 14 est TX3 et 15 est RX3 en réalité, sans conséquence puisque ce lien a changé de port.)
 
 *Schéma du pont diviseur recommandé pour chaque fil 5V Mega TX -> ESP32 RX :*
 ```text

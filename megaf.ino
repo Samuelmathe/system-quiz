@@ -1,3 +1,12 @@
+// [FIX] Le shield DMX est reellement cable sur Serial0 (broches 0/1) --
+// verifie directement sur le schema du shield (quizkicad/mega, projet
+// separe). Doit etre defini AVANT d'inclure DMXSerial.h : sans lui, la
+// lib personnalisee de ce projet bascule par defaut sur Serial3 (broches
+// 14/15), qui ne correspond a aucun cablage reel et entrait en conflit
+// avec PC_SERIAL (egalement Serial3). C'est aussi pour ca qu'il faut
+// retirer les cavaliers pour televerser : le shield DMX partage les
+// memes broches que l'USB de programmation (Serial0).
+#define DMX_FORCE_USART0
 #include <DMXSerial.h>
 #include <EEPROM.h>
 #include <string.h>
@@ -26,7 +35,32 @@ void getMcusrEtStopperWdt(void) {
 // reste noire). Sans ce bump, une EEPROM ecrite par l'ancienne version
 // serait relue telle quelle.
 #define MAGIC_NUMBER 0xAF
-#define PC_SERIAL  Serial3   // liaison vers le PC (logiciel Node.js)
+// [FIX] Deux chemins de config independants et SIMULTANES, plus besoin de
+// choisir : Serial3 (cable TTL vers les scripts Python config_final_30.py /
+// interface_30eq.py -- le "logiciel PC" historique, pas du Node.js comme
+// l'ancien commentaire le disait) ET Serial1 (ESP32 hub, interface web
+// WiFi -- Serial1 etait completement libre, verifie par recherche globale
+// dans ce fichier). Si le WiFi a un souci sur place, le cable marche deja,
+// sans manipulation. Les DEUX recoivent les memes messages de statut (voir
+// DualStatusSerial ci-dessous) et les DEUX peuvent envoyer des commandes
+// (2 boucles de lecture separees dans loop(), meme protocole/parseCommande).
+class DualStatusSerial : public Print {
+public:
+    size_t write(uint8_t c) override {
+        Serial3.write(c);
+        Serial1.write(c);
+        return 1;
+    }
+    size_t write(const uint8_t *buffer, size_t size) override {
+        Serial3.write(buffer, size);
+        Serial1.write(buffer, size);
+        return size;
+    }
+};
+DualStatusSerial pcEtEsp32Serial;
+
+#define PC_SERIAL  pcEtEsp32Serial  // SORTIE seulement (broadcast Serial3+Serial1) -- lecture : voir Serial3/Serial1 directement dans setup()/loop()
+#define ESP32_SERIAL Serial1  // liaison config ESP32 (broches Mega TX1=18/RX1=19, cote ESP32 voir esp32_bridge_server.ino)
 #define NANO_SERIAL Serial2  // liaison vers le RF-Nano (RX2=17, TX2=16)
 #define NANO_BAUD 19200
 
@@ -105,10 +139,13 @@ inline void ledUpdate() {
     }
 }
 
-// ---- Buffers lignes série (PC et Nano séparés) ----
+// ---- Buffers lignes série (PC câble, ESP32 WiFi, et Nano séparés) ----
 #define SERIAL_BUF_LEN 96
 char serialBuf[SERIAL_BUF_LEN];
 uint8_t serialLen = 0;
+
+char esp32Buf[SERIAL_BUF_LEN];
+uint8_t esp32Len = 0;
 
 char nanoBuf[SERIAL_BUF_LEN];
 uint8_t nanoLen = 0;
@@ -241,7 +278,8 @@ void setup() {
         initialiserConfigParDefaut();
     }
 
-    PC_SERIAL.begin(9600);
+    Serial3.begin(9600);        // câble PC (scripts Python)
+    ESP32_SERIAL.begin(9600);   // ESP32 hub (même baud/protocole que Serial3)
     NANO_SERIAL.begin(NANO_BAUD);
 
     for (int i = 0; i < 3; i++) {
@@ -292,14 +330,14 @@ void loop() {
         dernierSignal = -1;
     }
 
-    // RÉCEPTION série PC
+    // RÉCEPTION série PC (câble, Serial3)
     // [FIX] wdt_reset() a chaque caractere : si un gros paquet de lignes
     // arrive d'un coup, cette boucle peut a elle seule durer plusieurs
     // secondes dans une meme iteration de loop() -- sans reset ici, ca
     // peut depasser les 4s du watchdog et provoquer un vrai reboot.
-    while (PC_SERIAL.available() > 0) {
+    while (Serial3.available() > 0) {
         wdt_reset();
-        char c = (char)PC_SERIAL.read();
+        char c = (char)Serial3.read();
         if (c == '\r') continue;
         if (c == '\n') {
             serialBuf[serialLen] = '\0';
@@ -314,6 +352,29 @@ void loop() {
             serialBuf[serialLen++] = c;
         } else {
             serialLen = 0;
+        }
+    }
+
+    // RÉCEPTION série ESP32 (WiFi, Serial1) -- meme protocole/parseCommande
+    // que le cable PC ci-dessus, buffer separe (deux sources actives en
+    // meme temps ne doivent jamais se melanger dans une seule ligne).
+    while (ESP32_SERIAL.available() > 0) {
+        wdt_reset();
+        char c = (char)ESP32_SERIAL.read();
+        if (c == '\r') continue;
+        if (c == '\n') {
+            esp32Buf[esp32Len] = '\0';
+            while (esp32Len > 0 && (esp32Buf[esp32Len - 1] == ' ' || esp32Buf[esp32Len - 1] == '\t')) {
+                esp32Buf[--esp32Len] = '\0';
+            }
+            uint8_t start = 0;
+            while (esp32Buf[start] == ' ' || esp32Buf[start] == '\t') start++;
+            if (esp32Len > start) parseCommande(esp32Buf + start);
+            esp32Len = 0;
+        } else if (esp32Len < SERIAL_BUF_LEN - 1) {
+            esp32Buf[esp32Len++] = c;
+        } else {
+            esp32Len = 0;
         }
     }
 

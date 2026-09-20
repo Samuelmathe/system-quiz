@@ -18,7 +18,12 @@
 //   5. Émetteur radio vers les buzzers (ordres 99/88 pour LED) et le Nano Son (00002)
 //   6. Double liaison UART vers l'Arduino Mega 2560 :
 //      - Serial1 (GPIO 25 TX, GPIO 26 RX @ 19200 baud) <-> Mega Serial2 (Lien Jeu/Radio)
-//      - Serial2 (GPIO 17 TX, GPIO 16 RX @ 9600 baud)  <-> Mega Serial3 (Lien Config EEPROM)
+//      - Serial2 (GPIO 17 TX, GPIO 16 RX @ 9600 baud)  <-> Mega Serial1 (Lien Config EEPROM)
+//        [FIX] Deplace de Mega Serial3 vers Mega Serial1 : Serial3 reste
+//        dedie au cable TTL PC (scripts Python config_final_30.py /
+//        interface_30eq.py) en secours simultane, pas en remplacement --
+//        les deux chemins de config marchent en meme temps desormais, voir
+//        megaf.ino. Serial1 etait completement libre sur la Mega.
 //   7. Récepteur ESP-NOW (canal Wi-Fi fixe ESPNOW_WIFI_CHANNEL, broadcast) —
 //      architecture de SECOURS si les nRF24 posent problème sur site : des
 //      boitiers ESP32 (esp32_buzzer_equipe.ino / esp32_animateur.ino) peuvent
@@ -45,8 +50,13 @@
 //        ESP32 TX1 (GPIO 25) -> Mega RX2 (pin 17) [3.3V lu comme HIGH par la Mega : direct OK]
 //        ESP32 RX1 (GPIO 26) <- Mega TX2 (pin 16) [5V Mega -> pont diviseur 1kΩ/2kΩ vers ESP32]
 //    - Lien Config EEPROM (9600 baud) :
-//        ESP32 TX2 (GPIO 17) -> Mega RX3 (pin 14) [direct OK]
-//        ESP32 RX2 (GPIO 16) <- Mega TX3 (pin 15) [5V Mega -> pont diviseur 1kΩ/2kΩ vers ESP32]
+//        ESP32 TX2 (GPIO 17) -> Mega RX1 (pin 19) [direct OK]
+//        ESP32 RX2 (GPIO 16) <- Mega TX1 (pin 18) [5V Mega -> pont diviseur 1kΩ/2kΩ vers ESP32]
+//      [FIX] Anciennement Mega RX3/TX3 (pins 14/15, Serial3) -- deplace sur
+//      Serial1 (pins 18/19) pour laisser Serial3 dedie au cable TTL PC en
+//      secours simultane. Au passage : l'ancien commentaire avait RX3/TX3
+//      inverses (14=TX3, 15=RX3 en realite, pas l'inverse) -- sans
+//      consequence ici puisque ce lien change de port de toute facon.
 //
 // ==========================================================================
 
@@ -89,9 +99,10 @@ IPAddress subnet(255, 255, 255, 0);
 #define MEGA_GAME_RX 26   // depuis Mega TX2 (pin 16)
 #define MEGA_GAME_BAUD 19200
 
-// UART vers Mega Serial3 (Lien Config EEPROM @ 9600)
-#define MEGA_CONF_TX 17   // vers Mega RX3 (pin 14)
-#define MEGA_CONF_RX 16   // depuis Mega TX3 (pin 15)
+// UART vers Mega Serial1 (Lien Config EEPROM @ 9600) -- deplace depuis
+// Mega Serial3, voir CÂBLAGE MATÉRIEL COMPLET ci-dessus
+#define MEGA_CONF_TX 17   // vers Mega RX1 (pin 19)
+#define MEGA_CONF_RX 16   // depuis Mega TX1 (pin 18)
 #define MEGA_CONF_BAUD 9600
 
 // --- Instances Serveur & Radio ---
@@ -561,7 +572,7 @@ void setup() {
     // UART1 : vers Mega Serial2 (Lien Jeu / Buzz @ 19200)
     Serial1.begin(MEGA_GAME_BAUD, SERIAL_8N1, MEGA_GAME_RX, MEGA_GAME_TX);
 
-    // UART2 : vers Mega Serial3 (Lien Config EEPROM @ 9600)
+    // UART2 (cote ESP32) : vers Mega Serial1 (Lien Config EEPROM @ 9600)
     Serial2.begin(MEGA_CONF_BAUD, SERIAL_8N1, MEGA_CONF_RX, MEGA_CONF_TX);
 
     // Initialisation radio nRF24
