@@ -3,6 +3,7 @@ import dearpygui.dearpygui as dpg
 import json
 import os
 import queue
+import sys
 import serial
 import serial.tools.list_ports
 import threading
@@ -11,7 +12,26 @@ from datetime import datetime
 import re
 
 # --- CONFIGURATION & FICHIERS ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+def _dossier_config():
+    """Dossier ou lire/ecrire config_quiz_pro.json.
+
+    [FIX] Avec l'exe PyInstaller (--onefile), __file__ pointe vers un dossier
+    TEMPORAIRE (_MEIxxxx) supprime a la fermeture : la config etait ecrite la,
+    puis perdue a chaque fois -> "ca reprend au debut". On utilise donc le
+    dossier de l'executable (comme interface_30eq.py), ou, s'il n'est pas
+    modifiable (ex. Program Files), un dossier "QuizDMX" dans le dossier de
+    l'utilisateur.
+    """
+    if getattr(sys, "frozen", False):
+        dossier = os.path.dirname(os.path.abspath(sys.executable))
+        if not os.access(dossier, os.W_OK):
+            dossier = os.path.join(os.path.expanduser("~"), "QuizDMX")
+            os.makedirs(dossier, exist_ok=True)
+        return dossier
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+BASE_DIR = _dossier_config()
 CONFIG_FILE = os.path.join(BASE_DIR, "config_quiz_pro.json")
 ser = None
 
@@ -332,6 +352,9 @@ def envoyer_configuration_complete():
         if (adr + nb_canaux - 1) > 512:
             log(f"Erreur Proj {i+1} : Fin canal {adr + nb_canaux - 1} > 512", color=[255, 0, 0])
             return
+
+    # Ce qui part vers la Mega doit aussi etre garde sur le PC.
+    save_config()
 
     def thread_sync():
         try:
@@ -783,6 +806,10 @@ def main():
     while dpg.is_dearpygui_running():
         drain_ui_queue()
         dpg.render_dearpygui_frame()
+    try:
+        save_config()  # ne rien perdre si on ferme sans avoir clique "SAUVER CONFIG PC"
+    except OSError:
+        pass
     dpg.destroy_context()
 
 
