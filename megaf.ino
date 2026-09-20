@@ -1,12 +1,17 @@
-// [FIX] Le shield DMX est reellement cable sur Serial0 (broches 0/1) --
-// verifie directement sur le schema du shield (quizkicad/mega, projet
-// separe). Doit etre defini AVANT d'inclure DMXSerial.h : sans lui, la
-// lib personnalisee de ce projet bascule par defaut sur Serial3 (broches
-// 14/15), qui ne correspond a aucun cablage reel et entrait en conflit
-// avec PC_SERIAL (egalement Serial3). C'est aussi pour ca qu'il faut
-// retirer les cavaliers pour televerser : le shield DMX partage les
-// memes broches que l'USB de programmation (Serial0).
+// Port serie utilise pour le DMX.
+//   1 = Serial0 (broches 0/1) : cas d'un shield DMX standard empile sur la
+//       Mega -- c'est aussi pour ca qu'il faut retirer ses cavaliers pour
+//       televerser (memes broches que l'USB de programmation).
+//   0 = laisse la lib DMXSerial du projet choisir : Serial3 (broches 14/15).
+// ATTENTION, hypothese NON verifiee sur le vrai materiel : le cablage exact du
+// shield du client n'a pas ete confirme (une premiere version de ce
+// commentaire s'appuyait a tort sur le projet KiCad quizkicad/mega, qui ne
+// contient que les connecteurs de la Mega, pas le circuit DMX). Si les
+// lumieres ne s'allument plus apres ce changement, passer a 0 et reflasher.
+#define DMX_SUR_SERIAL0 1
+#if DMX_SUR_SERIAL0
 #define DMX_FORCE_USART0
+#endif
 #include <DMXSerial.h>
 #include <EEPROM.h>
 #include <string.h>
