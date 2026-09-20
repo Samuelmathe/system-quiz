@@ -1,17 +1,11 @@
-// Port serie utilise pour le DMX.
-//   1 = Serial0 (broches 0/1) : cas d'un shield DMX standard empile sur la
-//       Mega -- c'est aussi pour ca qu'il faut retirer ses cavaliers pour
-//       televerser (memes broches que l'USB de programmation).
-//   0 = laisse la lib DMXSerial du projet choisir : Serial3 (broches 14/15).
-// ATTENTION, hypothese NON verifiee sur le vrai materiel : le cablage exact du
-// shield du client n'a pas ete confirme (une premiere version de ce
-// commentaire s'appuyait a tort sur le projet KiCad quizkicad/mega, qui ne
-// contient que les connecteurs de la Mega, pas le circuit DMX). Si les
-// lumieres ne s'allument plus apres ce changement, passer a 0 et reflasher.
-#define DMX_SUR_SERIAL0 1
-#if DMX_SUR_SERIAL0
-#define DMX_FORCE_USART0
-#endif
+// DMX : ce sketch se compile avec la lib DMXSerial STANDARD (lib/DMXSerial), qui
+// utilise Serial0 (broches 0/1) sur Mega -- d'ou les cavaliers du shield DMX a
+// retirer pour televerser, et a REMETTRE apres. Ne pas utiliser la version
+// modifiee de src/ (DMX sur USART3) : elle ne se lie pas avec ce sketch
+// ("multiple definition of __vector_54", conflit avec Serial3 = PC_SERIAL).
+// (Une version precedente de ce fichier definissait DMX_FORCE_USART0 en
+// s'appuyant a tort sur le projet KiCad quizkicad/mega ; ce define n'avait
+// d'ailleurs aucun effet avec la lib standard, il est retire.)
 #include <DMXSerial.h>
 #include <EEPROM.h>
 #include <string.h>
