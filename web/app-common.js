@@ -206,12 +206,12 @@
       } catch (e) {}
     }
 
-    _notify(sourceEvent = "UPDATE") {
+    _notify(sourceEvent = "UPDATE", detail) {
       this._saveState();
       if (this.channel) {
         this.channel.postMessage({ type: "SYNC_STATE", state: this.state, event: sourceEvent });
       }
-      this.listeners.forEach(fn => fn(this.state, sourceEvent));
+      this.listeners.forEach(fn => fn(this.state, sourceEvent, detail));
     }
 
     _onRemoteState(payload) {
@@ -297,6 +297,9 @@
           break;
         case "MEGA_READY":
           this.listeners.forEach(fn => fn(this.state, "MEGA_READY", msg));
+          break;
+        case "MEGA_CONFIG":
+          this._appliquerDumpMega(msg.dump);
           break;
       }
     }
@@ -636,6 +639,68 @@
     // Vérifié aussi côté ESP32 (voir esp32_bridge_server.ino) — l'écran de
     // verrouillage de config.js seul ne suffirait pas contre un appel direct
     // depuis la console du navigateur.
+    // Demande a la Mega sa config courante (reponse : event WS "MEGA_CONFIG").
+    // La Mega est la reference commune avec le logiciel Python de config :
+    // ce que l'un y ecrit (SET_* + SAVE_CONFIG), l'autre peut le relire.
+    demanderConfigMega(password) {
+      this._sendWs({ type: "GET_CONFIG", password: password });
+    }
+
+    // Applique un dump "CFG:..." (lignes separees par '|') sur l'etat local.
+    // Ce que la Mega ne stocke pas (noms d'equipes, scores, couleurs d'interface)
+    // est conserve tel quel. Retourne le resume, ou null si le dump est inutilisable.
+    _appliquerDumpMega(dump) {
+      const nombres = (parts) => parts.slice(2).map((v) => parseInt(v, 10));
+      const hex = (r, g, b) => "#" + [r, g, b]
+        .map((v) => Math.max(0, Math.min(255, v | 0)).toString(16).padStart(2, "0"))
+        .join("").toUpperCase();
+
+      let nbEq = 0;
+      const projecteurs = [];
+      const strobes = {};
+      const couleurs = {};
+      String(dump || "").split("|").forEach((ligne) => {
+        const parts = ligne.split(":");
+        if (parts[0] !== "CFG") return;
+        const n = nombres(parts);
+        if (parts[1] === "NB_EQ") {
+          nbEq = n[0];
+        } else if (parts[1] === "PROJ" && n.length >= 11) {
+          projecteurs[n[0]] = {
+            id: n[0] + 1, adresse: n[1], nbCanaux: n[2], mode: n[10],
+            offDim: n[3], offR: n[4], offG: n[5], offB: n[6],
+            offStrobe: n[7], strobeValue: n[8], strobeRepos: n[9]
+          };
+        } else if (parts[1] === "STROBE" && n.length >= 2) {
+          strobes[n[0] - 1] = n[1];
+        } else if (parts[1] === "COL" && n.length >= 5) {
+          (couleurs[n[0] - 1] = couleurs[n[0] - 1] || {})[n[1]] = hex(n[2], n[3], n[4]);
+        }
+      });
+
+      const projs = projecteurs.filter(Boolean);
+      if (!(nbEq >= 1) || projs.length === 0) {
+        this.listeners.forEach(fn => fn(this.state, "MEGA_CONFIG_ERROR",
+          { msg: "Configuration reçue de la Mega incomplète ou vide." }));
+        return null;
+      }
+
+      this.state.projecteurs = projs;
+      const equipes = [];
+      for (let e = 0; e < nbEq; e++) {
+        const existante = this.state.equipes[e];
+        const cols = projs.map((_, g) => (couleurs[e] && couleurs[e][g]) || "#FFFFFF");
+        equipes.push(Object.assign(
+          existante || { id: e, nom: `Équipe ${e + 1}`, score: 0, couleursUI: [cols[0], cols[0]] },
+          { couleurs: cols, strobeDureeMs: strobes[e] !== undefined ? strobes[e] : 0 }
+        ));
+      }
+      this.state.equipes = equipes;
+      const resume = { nbEquipes: nbEq, nbProjecteurs: projs.length };
+      this._notify("MEGA_CONFIG_APPLIED", resume);
+      return resume;
+    }
+
     syncConfigToMega(password) {
       this._sendWs({
         type: "SYNC_CONFIG",

@@ -67,6 +67,7 @@
 
   // Sync & Logs
   const btnSyncMega = document.getElementById("btn-sync-mega");
+  const btnReadMega = document.getElementById("btn-read-mega");
   const logsConsole = document.getElementById("logs-console");
   const btnClearLogs = document.getElementById("btn-clear-logs");
 
@@ -534,6 +535,45 @@
     }, 6000);
   };
 
+  // Lecture de la config depuis la Mega (source commune avec le logiciel Python).
+  // La Mega ne connait pas les noms d'equipes ni les scores : ils sont conserves.
+  let lectureEnCours = false;
+  let lectureTimeoutId = null;
+
+  function terminerLecture(succes, detail) {
+    lectureEnCours = false;
+    if (lectureTimeoutId) { clearTimeout(lectureTimeoutId); lectureTimeoutId = null; }
+    btnReadMega.disabled = false;
+    btnReadMega.textContent = "⬇ Lire depuis la Mega";
+    if (succes) {
+      hub.uiAlert(detail || "Configuration lue depuis la Mega.");
+    } else {
+      hub.uiAlert(detail || "Échec de la lecture : vérifier que l'ESP32 et la Mega sont connectés et alimentés.");
+    }
+  }
+
+  btnReadMega.onclick = () => {
+    if (lectureEnCours || syncEnCours) return;
+    if (!hub.state.connected) {
+      hub.uiAlert("ESP32 non connecté (Wi-Fi) : impossible de lire la Mega.");
+      return;
+    }
+    hub.uiConfirm(
+      "Remplacer les projecteurs, couleurs et strobes affichés ici par ceux enregistrés dans la Mega ?\n" +
+      "(Les noms d'équipes et les scores sont conservés.)"
+    ).then((ok) => {
+      if (!ok) return;
+      lectureEnCours = true;
+      btnReadMega.disabled = true;
+      btnReadMega.textContent = "⏳ Lecture en cours...";
+      addLog("Lecture de la configuration depuis la Mega...", "var(--color-gold)");
+      hub.demanderConfigMega(CONFIG_PASSWORD);
+      lectureTimeoutId = setTimeout(() => {
+        terminerLecture(false, "Aucune réponse de la Mega après 15s (liaison ESP32↔Mega à vérifier, ou Mega sans le firmware GET_CONFIG).");
+      }, 15000);
+    });
+  };
+
   // Export JSON
   btnExportJson.onclick = () => {
     const data = {
@@ -593,9 +633,22 @@
   // esp32_bridge_server.ino relaie chaque ligne CONF:.../ERR:... de la Mega
   // via un event WS "LOG" (parseLigneMegaConf -> broadcastLog).
   hub.subscribe((state, eventType, msg) => {
+    if (eventType === "MEGA_CONFIG_APPLIED" && lectureEnCours) {
+      const r = msg || {};
+      terminerLecture(true, `Configuration lue depuis la Mega : ${r.nbProjecteurs} projecteur(s), ${r.nbEquipes} équipe(s).`);
+      return;
+    }
+    if (eventType === "MEGA_CONFIG_ERROR" && lectureEnCours) {
+      terminerLecture(false, (msg && msg.msg) || undefined);
+      return;
+    }
     if (eventType !== "WS_LOG" || !msg) return;
     const texte = String(msg.msg || "");
     addLog(texte, msg.color || "var(--text-secondary)");
+    if (lectureEnCours && texte.includes("GET_CONFIG_BUSY")) {
+      terminerLecture(false, "La Mega est en manche (buzz en cours) : valider ou refuser d'abord, puis relire.");
+      return;
+    }
     if (!syncEnCours) return;
     if (texte.includes("SAVED_TO_EEPROM")) {
       terminerSync(true);

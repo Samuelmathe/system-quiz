@@ -189,3 +189,17 @@ Mega TX (5V) ───[ 1 kΩ ]───┬───> ESP32 RX (3.3V)
 | Erreur *"Sketch too big"* / dépasse l'espace disponible | Partition Scheme trop petite pour le code | Reprenez l'étape 1.3 : choisissez un schéma avec plus d'espace APP. |
 | L'envoi LittleFS échoue ou le port se ferme tout seul | Moniteur Série encore ouvert, ou mauvais port sélectionné | Fermez le Moniteur Série, revérifiez **Outils > Port**. |
 | Page de secours au lieu de l'interface | Fichiers `web/` pas encore envoyés en LittleFS | Refaites l'étape 2 ci-dessus (le firmware seul ne suffit pas, il faut aussi l'envoi LittleFS séparé). |
+
+---
+
+## 🔄 Synchroniser le logiciel Python et l'application de configuration
+
+La **Mega** est la référence commune : le logiciel Python (`config_final_30.py`) et l'appli web (`config.html` / APK Régie) y écrivent chacun leur configuration (`SET_...` puis `SAVE_CONFIG`), et peuvent maintenant **la relire** avec le bouton **« Lire depuis la Mega »** (commande `GET_CONFIG`).
+
+- Configuré dans le **logiciel Python** → cliquer **SYNCHRONISER MEGA**, puis dans l'appli : **⬇ Lire depuis la Mega**.
+- Configuré dans **l'appli** → **⚡ Synchroniser la Mega**, puis dans le logiciel Python : **LIRE DEPUIS LA MEGA**.
+- Sont synchronisés : projecteurs (adresse, canaux, décalages, strobe, mode), nombre d'équipes, couleur de chaque équipe par projecteur, durée de strobe par équipe.
+- **Ne sont pas dans la Mega** (donc propres à chaque outil) : noms d'équipes, scores, questions, sons. La lecture les conserve dans l'appli.
+- La lecture est **refusée pendant une manche** (après un buzz, tant que rien n'est validé/refusé) pour ne jamais gêner le jeu ; elle est non bloquante et dure moins d'une seconde pour une config normale.
+- Le logiciel Python sauvegarde l'ancienne config PC en `config_quiz_pro.json.bak` avant d'être remplacée.
+- Nécessite la Mega **et** l'ESP32 reflashés avec cette version (nouveau `megaf.ino` + `esp32_bridge_server.ino`) et l'upload LittleFS du dossier `data/`.

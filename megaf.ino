@@ -378,6 +378,8 @@ void loop() {
         }
     }
 
+    pomperLectureConfig();
+
     // RÉCEPTION série NANO (buzz déjà résolus, un seul gagnant par message)
     // [FIX] même raison que la boucle PC_SERIAL ci-dessus : sous rafale
     // (stress test), le pont peut envoyer beaucoup de lignes d'un coup.
@@ -491,6 +493,88 @@ static uint8_t parse_colon_ints(const char *s, int *out, uint8_t maxCount) {
     return count;
 }
 
+// =========================================================
+// LECTURE DE LA CONFIG (GET_CONFIG) -- envoi non bloquant
+// =========================================================
+// Une ligne par passage dans loop(), et seulement si les DEUX ports (cable PC
+// Serial3, ESP32 Serial1) ont la place dans leur tampon d'emission : un
+// Serial.write() sur tampon plein BLOQUE, ce qui avait deja failli faire
+// deborder le watchdog sous rafale. Aucun impact sur le chemin du buzz
+// (liaison Serial2, DMX sur Serial0). Lignes emises :
+//   CFG:BEGIN
+//   CFG:NB_EQ:<n>
+//   CFG:PROJ:<i>:<adr>:<nbCanaux>:<offDim>:<offR>:<offG>:<offB>:<offStrobe>:<strobeValue>:<strobeRepos>:<mode>
+//   CFG:STROBE:<equipe 1..n>:<dureeMs>
+//   CFG:COL:<equipe 1..n>:<projecteur 0..>:<r>:<g>:<b>
+//   CFG:END
+uint8_t cfgStage = 0;   // 0 = inactif
+int cfgA = 0, cfgB = 0, cfgNbProj = 0;
+
+// Un projecteur est "utilise" si son adresse DMX est renseignee (>0), meme
+// convention que declencherEffetGagnant().
+static int nbProjecteursActifs() {
+    int n = 0;
+    for (int p = 0; p < 30; p++) {
+        if (settings.adressesDMX[p] > 0) n = p + 1;
+    }
+    return n;
+}
+
+static int formaterLigneCfg(char *buf, size_t n) {
+    switch (cfgStage) {
+        case 1: return snprintf(buf, n, "CFG:BEGIN");
+        case 2: return snprintf(buf, n, "CFG:NB_EQ:%d", settings.nbEquipes);
+        case 3: {
+            const FixtureProfile &f = settings.profils[cfgA];
+            return snprintf(buf, n, "CFG:PROJ:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d",
+                            cfgA, settings.adressesDMX[cfgA], f.nbCanaux, f.offDim,
+                            f.offR, f.offG, f.offB, f.offStrobe,
+                            (int)f.strobeValue, (int)f.strobeRepos, (int)f.mode);
+        }
+        case 4: return snprintf(buf, n, "CFG:STROBE:%d:%d", cfgA + 1, settings.strobeDureeMs[cfgA]);
+        case 5: return snprintf(buf, n, "CFG:COL:%d:%d:%d:%d:%d", cfgA + 1, cfgB,
+                                (int)settings.couleurs[cfgA][cfgB][0],
+                                (int)settings.couleurs[cfgA][cfgB][1],
+                                (int)settings.couleurs[cfgA][cfgB][2]);
+        case 6: return snprintf(buf, n, "CFG:END");
+    }
+    return 0;
+}
+
+static void avancerLectureConfig() {
+    switch (cfgStage) {
+        case 1: cfgStage = 2; break;
+        case 2: cfgA = 0; cfgStage = (cfgNbProj > 0) ? 3 : 4; break;
+        case 3:
+            if (++cfgA >= cfgNbProj) { cfgA = 0; cfgStage = 4; }
+            break;
+        case 4:
+            if (++cfgA >= settings.nbEquipes) {
+                cfgA = 0; cfgB = 0;
+                cfgStage = (cfgNbProj > 0) ? 5 : 6;
+            }
+            break;
+        case 5:
+            if (++cfgB >= cfgNbProj) {
+                cfgB = 0;
+                if (++cfgA >= settings.nbEquipes) cfgStage = 6;
+            }
+            break;
+        case 6: cfgStage = 0; break;
+    }
+}
+
+void pomperLectureConfig() {
+    if (cfgStage == 0) return;
+    char buf[64];
+    int len = formaterLigneCfg(buf, sizeof(buf));
+    if (len <= 0 || len >= (int)sizeof(buf)) { cfgStage = 0; return; }
+    int besoin = len + 2; // + "\r\n" de println
+    if (Serial3.availableForWrite() < besoin || Serial1.availableForWrite() < besoin) return;
+    PC_SERIAL.println(buf);
+    avancerLectureConfig();
+}
+
 void parseCommande(const char *line) {
     if (strcmp(line, "WHO") == 0) {
         PC_SERIAL.println("READY_MEGA");
@@ -591,6 +675,20 @@ void parseCommande(const char *line) {
             }
         } else {
             PC_SERIAL.println("ERR:STROBE_EQ_INCOMPLETE");
+        }
+    }
+    else if (strcmp(line, "GET_CONFIG") == 0) {
+        // Lecture de la config courante (logiciel Python ET appli web ESP32
+        // relisent la meme source : la Mega). Refusee pendant une manche pour
+        // ne jamais gener un buzz ; l'envoi lui-meme est non bloquant, voir
+        // pomperLectureConfig().
+        if (jeuVerrouille || cfgStage != 0) {
+            PC_SERIAL.println("ERR:GET_CONFIG_BUSY");
+        } else {
+            cfgNbProj = nbProjecteursActifs();
+            cfgA = 0;
+            cfgB = 0;
+            cfgStage = 1;
         }
     }
     else if (strcmp(line, "SAVE_CONFIG") == 0) {

@@ -407,6 +407,110 @@ def envoyer_configuration_complete():
 
     threading.Thread(target=thread_sync, daemon=True).start()
 
+def parse_dump_mega(lignes):
+    """Convertit les lignes CFG:... renvoyees par la Mega (GET_CONFIG) en
+    (groupes_dmx, equipes) au format de config_quiz_pro.json. Leve ValueError
+    si le dump est incomplet. Ce que la Mega ne stocke pas (rien d'autre que
+    projecteurs, couleurs et strobes dans ce fichier) n'est pas concerne."""
+    nb_eq = 0
+    projs = {}
+    strobes = {}
+    couleurs = {}
+    for ligne in lignes:
+        p = ligne.strip().split(":")
+        if len(p) < 3 or p[0] != "CFG":
+            continue
+        try:
+            n = [int(v) for v in p[2:]]
+        except ValueError:
+            continue
+        if p[1] == "NB_EQ":
+            nb_eq = n[0]
+        elif p[1] == "PROJ" and len(n) >= 11:
+            projs[n[0]] = {
+                "id": n[0] + 1, "adresse": n[1], "nb_canaux": n[2],
+                "off_dim": n[3], "off_r": n[4], "off_g": n[5], "off_b": n[6],
+                "off_strobe": n[7], "strobe_value": n[8], "strobe_repos": n[9],
+                "mode": n[10],
+            }
+        elif p[1] == "STROBE" and len(n) >= 2:
+            strobes[n[0] - 1] = n[1]
+        elif p[1] == "COL" and len(n) >= 5:
+            couleurs.setdefault(n[0] - 1, {})[n[1]] = [n[2], n[3], n[4]]
+
+    if nb_eq < 1 or not projs:
+        raise ValueError("configuration recue incomplete ou vide")
+
+    groupes = [projs[i] for i in sorted(projs)]
+    for i, grp in enumerate(groupes):
+        grp["id"] = i + 1
+    equipes = []
+    for e in range(nb_eq):
+        equipes.append({
+            "couleurs": [couleurs.get(e, {}).get(g, [255, 255, 255]) for g in range(len(groupes))],
+            "strobe_duree_ms": strobes.get(e, 0),
+        })
+    return groupes, equipes
+
+
+def lire_configuration_mega():
+    global ser
+    if not ser or not ser.is_open:
+        log("ERREUR : Arduino non connecte !", color=[255, 50, 50])
+        return
+    port = ser
+
+    def thread_lecture():
+        try:
+            schedule_ui(lambda: log("Lecture de la configuration depuis la Mega...", color=[255, 165, 0]))
+            port.reset_input_buffer()
+            port.write(b"GET_CONFIG\n")
+            lignes = []
+            fin = time.time() + 15
+            occupe = False
+            termine = False
+            while time.time() < fin:
+                brut = port.readline().decode(errors="ignore").strip()
+                if not brut:
+                    continue
+                if "GET_CONFIG_BUSY" in brut:
+                    occupe = True
+                    break
+                if brut.startswith("CFG:"):
+                    lignes.append(brut)
+                    if brut == "CFG:END":
+                        termine = True
+                        break
+            if occupe:
+                schedule_ui(lambda: log("Mega en manche (buzz en cours) : valider/refuser puis relire.", color=[255, 150, 0]))
+                return
+            if not termine:
+                schedule_ui(lambda: log("Aucune reponse complete de la Mega (firmware sans GET_CONFIG ?).", color=[255, 50, 50]))
+                return
+            groupes, equipes = parse_dump_mega(lignes)
+
+            def appliquer():
+                if os.path.exists(CONFIG_FILE):
+                    try:
+                        with open(CONFIG_FILE, 'r', encoding='utf-8') as f_in, \
+                             open(CONFIG_FILE + ".bak", 'w', encoding='utf-8') as f_out:
+                            f_out.write(f_in.read())
+                    except OSError:
+                        pass
+                config["groupes_dmx"] = groupes
+                config["equipes"] = equipes
+                save_config()
+                refresh_ui_full()
+                log(f"Configuration lue depuis la Mega : {len(groupes)} projecteur(s), {len(equipes)} equipe(s). "
+                    f"(ancienne config PC sauvegardee en .bak)", color=[0, 255, 127])
+
+            schedule_ui(appliquer)
+        except Exception as e:
+            schedule_ui(lambda err=str(e): log(f"Erreur lecture Mega : {err}", color=[255, 0, 0]))
+
+    threading.Thread(target=thread_lecture, daemon=True).start()
+
+
 def toggle_connection():
     global ser
     brut = dpg.get_value("port_combo")
@@ -626,9 +730,11 @@ def setup_ui():
 
             # COLONNE DROITE
             with dpg.group():
-                with dpg.child_window(height=220, border=True):
+                with dpg.child_window(height=265, border=True):
                     dpg.add_text("ACTIONS", color=[0, 180, 255])
                     dpg.add_button(label="SAUVER CONFIG PC", callback=verifier_et_sauver, width=-1, height=30)
+                    dpg.add_spacer(height=5)
+                    dpg.add_button(label="LIRE DEPUIS LA MEGA", callback=lire_configuration_mega, width=-1, height=30)
                     dpg.add_spacer(height=5)
                     btn_sync = dpg.add_button(label="SYNCHRONISER MEGA", callback=envoyer_configuration_complete, width=-1, height=45)
                     dpg.bind_item_theme(btn_sync, "bleu_theme")

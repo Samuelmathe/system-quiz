@@ -3,9 +3,12 @@
 // ==========================================================================
 // Carte recommandée : ESP32 Dev Module / NodeMCU-32S / ESP-WROOM-32
 // Carte confirmée commandée par le client pour le hub (régie centrale) :
-// ESP32 DevKit V1, puce USB-série FT232, 30 broches, micro-USB. Choisir
-// "ESP32 Dev Module" dans Arduino IDE. Pilote USB nécessaire : FTDI VCP
-// (pas CP210x/CH340, ce n'est pas la puce de cette carte).
+// ESP32 DevKit V1, 30 broches, micro-USB. Choisir "ESP32 Dev Module" dans
+// Arduino IDE. [FIX] La carte reellement recue par le client a une puce
+// USB-serie CP2102 (Silicon Labs), PAS un FT232 comme note a l'origine :
+// pilote CP210x VCP necessaire (Gestionnaire de peripheriques -> "CP2102 USB
+// to UART Bridge Controller" sans pilote = aucun port COM dans l'IDE).
+// Etiquettes de la carte : "RX2"/"TX2" = GPIO16/GPIO17 (UART2).
 //
 // Rôles de l'ESP32 :
 //   1. Point d'accès Wi-Fi autonome ("QuizDMX-Pro") + mDNS (quizdmx.local)
@@ -494,6 +497,18 @@ void handleWsMessage(void *arg, uint8_t *data, size_t len) {
             JsonObject config = doc["config"];
             syncConfigToMega(config);
         }
+        else if (strcmp(type, "GET_CONFIG") == 0) {
+            // Meme verification de mot de passe que SYNC_CONFIG : la config de
+            // la regie ne doit pas etre lisible sans passer par l'ecran de
+            // verrouillage de config.html.
+            const char* pass = doc["password"];
+            if (!pass || strcmp(pass, CONFIG_PASSWORD) != 0) {
+                broadcastLog("Lecture refusee : mot de passe Regie incorrect.", "#EF4444");
+                return;
+            }
+            broadcastLog("Lecture de la configuration depuis la Mega...", "#FBBF24");
+            Serial2.println("GET_CONFIG");
+        }
     }
 }
 
@@ -547,7 +562,48 @@ void parseLigneMegaJeu(const char *line) {
 // ==========================================================================
 // PARSING UART MEGA SERIAL2 (Lien Config EEPROM : 9600 bauds)
 // ==========================================================================
+// Lecture de la config depuis la Mega (reponse a GET_CONFIG) : la Mega envoie
+// des lignes "CFG:..." (voir megaf.ino). On les accumule ici puis on les
+// diffuse en UN SEUL message WebSocket a "CFG:END" (lignes separees par '|'),
+// au lieu d'un message par ligne : la file de messages de AsyncWebSocket est
+// limitee et un envoi par ligne pourrait en perdre sur un client lent.
+static String cfgAccum;
+static bool cfgReception = false;
+
+void traiterLigneCfg(const char *line) {
+    if (strcmp(line, "CFG:BEGIN") == 0) {
+        cfgAccum = "";
+        cfgReception = true;
+        return;
+    }
+    if (!cfgReception) return;
+    if (strcmp(line, "CFG:END") == 0) {
+        cfgReception = false;
+        String out = "{\"event\":\"MEGA_CONFIG\",\"dump\":\"" + cfgAccum + "\"}";
+        broadcastWs(out);
+        broadcastLog(">> Configuration lue depuis la Mega", "#10B981");
+        cfgAccum = "";
+        return;
+    }
+    // Rejette toute ligne pouvant casser le JSON assemble a la main
+    for (const char *c = line; *c; c++) {
+        if (*c == '"' || *c == '\\') return;
+    }
+    if (cfgAccum.length() > 30000) {
+        cfgReception = false;
+        cfgAccum = "";
+        broadcastLog("Lecture config abandonnee : reponse de la Mega trop longue.", "#EF4444");
+        return;
+    }
+    if (cfgAccum.length()) cfgAccum += '|';
+    cfgAccum += line;
+}
+
 void parseLigneMegaConf(const char *line) {
+    if (starts_with(line, "CFG:")) {
+        traiterLigneCfg(line);
+        return;
+    }
     // Relais dans les logs console de config.html
     if (starts_with(line, "CONF:")) {
         broadcastLog(String(">> ") + line, "#10B981");
